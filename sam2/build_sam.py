@@ -71,7 +71,7 @@ HF_MODEL_ID_TO_FILENAMES = {
 def build_sam2(
     config_file,
     ckpt_path=None,
-    device="cuda",
+    device="cpu",
     mode="eval",
     hydra_overrides_extra=[],
     apply_postprocessing=True,
@@ -100,7 +100,7 @@ def build_sam2(
 def build_sam2_video_predictor(
     config_file,
     ckpt_path=None,
-    device="cuda",
+    device="cpu",
     mode="eval",
     hydra_overrides_extra=[],
     apply_postprocessing=True,
