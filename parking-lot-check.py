@@ -1,3 +1,26 @@
+"""
+PROGRAM: parking-lot-check.py
+DESCRIPTION: This script uses the SAM2 model to detect parking slot occupancy in images.
+It connects to a Supabase database to update the status of parking slots based on the model's predictions.
+AUTHOR: HUBRIS KIM
+DATE: 2025-06-09
+VERSION: 1.0
+
+USAGE: python parking-lot-check2.py
+
+REQUIREMENTS:
+- Python 3.x
+- torch
+- numpy
+- matplotlib
+- PIL (Pillow)
+
+DEPENDENCIES:
+- supabase-py
+
+Rev.
+1.0: Initial version of the script.
+"""
 import os
 # if using Apple MPS, fall back to CPU for unsupported ops
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
@@ -164,7 +187,7 @@ def update_parking_slot_using_image():
   occupiedCount = 0 
   emptyCount = 0
 
-  #                   1      2      3      4      5      6      7      8      9      10     11     12     13     14     15     16     17     18     19     20     21     22     23     24  
+  #                   1      2      3      4      5      6      7      8      9      10     11     12     13     14     15     16     17     18     19     20     21     22     23     24
   lower_thresholds = [1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000,  1000 ]
   upper_thresholds = [15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000]
   score_thresholds = [0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,    0.7,  0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7  ]
@@ -227,7 +250,7 @@ def update_parking_slot_using_image():
             width = x_max - x_min + 1
             height = y_max - y_min + 1
 
-        if score_val >= score_thresh and pixel_count > lower and pixel_count < upper and width < height:
+        if score_val >= score_thresh and pixel_count > lower and pixel_count < upper and width < 250 and height < 250 and width < height * 2:
             occupiedCount += 1
             print(f"idx: {idx+1}, [O] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, slot={slots[idx]}, Score={score_val:.3f}, width={width}, height={height}")
 
@@ -272,7 +295,7 @@ def update_parking_slot_using_image():
             width = x_max - x_min + 1
             height = y_max - y_min + 1
 
-        if score_val >= score_thresh and pixel_count > lower and pixel_count < upper and width < height:
+        if score_val >= score_thresh and pixel_count > lower and pixel_count < upper and width < 250 and height < 250 and width < height * 2:
             occupiedCount += 1
             print(f"idx: {idx+1}, [O] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, slot={slots[idx]}, Score={score_val:.3f}, width={width}, height={height}")
             update_parking_slot_status(supabase, parking_lot_id, 1, slots[idx])
