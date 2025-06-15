@@ -32,6 +32,8 @@ from supabase import create_client, Client
 import time
 import glob
 import uuid
+from datetime import datetime
+
 
 supabase_url = "https://cevsjxqctilqzaeqllqc.supabase.co"
 supabase_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNldnNqeHFjdGlscXphZXFsbHFjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcxNDc5MjMxMSwiZXhwIjoyMDMwMzY4MzExfQ.oaEtnfGqjcMhbvNTadlOlAEf6Wji6-Qi8H2HLetOe4o"
@@ -44,7 +46,10 @@ elif torch.backends.mps.is_available():
     device = torch.device("mps")
 else:
     device = torch.device("cpu")
+
+device = torch.device("cpu")
 print(f"using device: {device}")
+
 
 if device.type == "cuda":
     # use bfloat16 for the entire notebook
@@ -63,19 +68,23 @@ elif device.type == "mps":
 np.random.seed(3)
 
 def show_mask(mask, ax, random_color=False, borders = True):
+    
     if random_color:
         color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
     else:
         color = np.array([30/255, 144/255, 255/255, 0.6])
+
     h, w = mask.shape[-2:]
     mask = mask.astype(np.uint8)
     mask_image =  mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
+
     if borders:
         import cv2
         contours, _ = cv2.findContours(mask,cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE) 
         # Try to smooth contours
         contours = [cv2.approxPolyDP(contour, epsilon=0.01, closed=True) for contour in contours]
         mask_image = cv2.drawContours(mask_image, contours, -1, (1, 1, 1, 0.5), thickness=2) 
+    
     ax.imshow(mask_image)
 
 def show_points(coords, labels, ax, marker_size=375):
@@ -91,10 +100,13 @@ def show_box(box, ax):
 
 def show_masks(image, masks, scores, point_coords=None, box_coords=None, input_labels=None, borders=True):
     for i, (mask, score) in enumerate(zip(masks, scores)):
+    
         plt.figure(figsize=(10, 10))
         plt.imshow(image)
+    
         print(f"Mask shape: {mask.shape}")
         show_mask(mask, plt.gca(), borders=borders)
+    
         if point_coords is not None:
             assert input_labels is not None
             show_points(point_coords, input_labels, plt.gca())
@@ -103,6 +115,7 @@ def show_masks(image, masks, scores, point_coords=None, box_coords=None, input_l
             show_box(box_coords, plt.gca())
         if len(scores) > 1:
             plt.title(f"Mask {i+1}, Score: {score:.3f}", fontsize=18)
+    
         plt.axis('off')
         plt.show()
 
@@ -135,6 +148,10 @@ predictor = SAM2ImagePredictor(sam2_model)
 
 def update_parking_slot_using_image():
   
+  now = datetime.now()
+  formatted = now.strftime("%Y-%m-%d %H:%M:%S.") + f"{now.microsecond // 1000:03d}"
+  print(formatted)
+
   folder_path = 'D:/Projects/react/aiparking/public/uploads/'
   jpg_files = glob.glob(os.path.join(folder_path, '*.jpg'))
   if not jpg_files:
@@ -150,8 +167,12 @@ def update_parking_slot_using_image():
 
   predictor.set_image(image)
 
+  now = datetime.now()
+  formatted = now.strftime("%Y-%m-%d %H:%M:%S.") + f"{now.microsecond // 1000:03d}"
+  print(formatted)
+
   input_points = np.array([
-      [222, 183],  #A1
+    [222, 183],  #A1
     [348, 183],  #A2
     [518, 188],  #A3
     [696, 189],  #A4
@@ -205,8 +226,8 @@ def update_parking_slot_using_image():
   #                   1      2      3      4      5      6      7      8      9      10     11     12     13     14     15     16     17     18     19     20     21     22     23     24     25     26     27     28     29     30     31     32     33     34     35     36
   #                   A1     A2     A3     A4     A5     A6     A7     B1     B2     B3     B4     B5     B6     B7     B8     B9     B10    B11    B12    C1     C2     C3     C4     C5     C6     C7     C8     C9     C10    C11    C12    D1     D2     D3     D4     D5
   lower_thresholds = [3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  1000,  1000,  1000,  1000,  1000,  1000,  1000 ]
-  upper_thresholds = [15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 30000, 30000, 30000, 30000, 30000]
-  score_thresholds = [0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.6,   0.6,   0.6,   0.6,   0.6,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.7,   0.4,   0.4,   0.4,   0.4,   0.4  ]
+  upper_thresholds = [15000, 15000, 15000, 15000, 15000, 15000, 15000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 30000, 30000, 30000, 30000, 30000]
+  score_thresholds = [0.7,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6  ]
   wh_thresholds    = [0,     0,     0,     0,     0,     0,     0,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     0,     0,     0,     0,     0    ]
   slots = (
     [f"A{i}" for i in range(1, 8)] +
@@ -255,6 +276,7 @@ def update_parking_slot_using_image():
 
         print(f"첫 번째 마스크의 픽셀 개수: {pixel_count}")   # 방법 A 결과
         print(f"첫 번째 마스크의 픽셀 개수: {pixel_count2}")  # 방법 B 결과
+        
 
         lower = lower_thresholds[idx]
         upper = upper_thresholds[idx]
@@ -297,6 +319,8 @@ def update_parking_slot_using_image():
 
         pixel_count = np.count_nonzero(mask_2d)
         pixel_count2 = mask_2d.sum()
+
+        print(next(predictor.model.parameters()).device)
 
         print(f"첫 번째 마스크의 픽셀 개수: {pixel_count}")   # 방법 A 결과
         print(f"첫 번째 마스크의 픽셀 개수: {pixel_count2}")  # 방법 B 결과
@@ -345,6 +369,11 @@ def update_parking_slot_using_image():
   print(f"Occupied Count:  {occupiedCount}")
   print(f"Empty Count   :  {emptyCount}")
 
+  now = datetime.now()
+  formatted = now.strftime("%Y-%m-%d %H:%M:%S.") + f"{now.microsecond // 1000:03d}"
+  print(formatted)
+
+
 while True:
-    update_parking_slot_using_image()
-    time.sleep(20)  # 20초 대기
+  update_parking_slot_using_image()
+  time.sleep(20)  # 20초 대기
