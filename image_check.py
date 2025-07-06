@@ -32,9 +32,9 @@ class ImageViewer(tk.Tk):
         self.problem_label.pack(side=tk.BOTTOM, fill=tk.X)
 
         # Bind navigation and action keys
-        self.bind("<Left>", self.show_prev)
-        self.bind("<Right>", self.show_next)
-        self.bind("<space>", self.mark_problem)
+        # self.bind("<Left>", self.show_prev)
+        # self.bind("<Right>", self.show_next)
+        # self.bind("<space>", self.mark_problem)
 
     def select_folder(self):
         # Open directory chooser

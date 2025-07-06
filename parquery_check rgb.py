@@ -136,9 +136,15 @@ folder_path = 'D:/Projects/vision/yolo/images/mp4/parquery_frames_0706_2/'
 #folder_completed_path = 'D:/Projects/vision/yolo/images/mp4/parquery_night2/'
 folder_completed_path = 'D:/Projects/vision/yolo/images/mp4/parquery_0706_2_results_test/'
 
-start_index = 0
-end_index = 4149
+#start_index = 0
+#end_index = 4149
+#index_step = 5    # 5 seconds
+
+start_index = 1365
+end_index = 1365
 index_step = 5    # 5 seconds
+
+
 
 def overlay_mask(base_image, mask, color=(30, 144, 255), alpha=0.6):
     """
@@ -231,11 +237,11 @@ def check_parking_slot_using_image():
       #                   0      1      2      3      4      5      6      7      8       9     10     11     12     13     14     15     16     17     18     19     20     21     22     23     24     25     26     27     28     29     30     31     32     33     34     35     36     37
       #                   1      2      3      4      5      6      7      8      9      10     11     12     13     14     15     16     17     18     19     20     21     22     23     24     25     26     27     28     29     30     31     32     33     34     35     36     37     38
       #                   A1     A2     A3     A4     A5     A6     A7     A8     A9     B1     B2     B3     B4     B5     B6     B7     B8     B9     B10    B11    B12    C1     C2     C3     C4     C5     C6     C7     C8     C9     C10    C11    C12    D1     D2     D3     D4     D5
-      lower_thresholds = [3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  1000,  1000,  1000,  1000,  1000,  1000,  1000 ]
-      upper_thresholds = [15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 15000, 15000, 15000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 15000, 15000, 5000,  30000, 30000, 30000, 30000, 30000]
+      lower_thresholds = [3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  1000,  1000,  1000,  1000,  1000,  1000,  1000 ]
+      upper_thresholds = [15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 30000, 30000, 30000, 30000, 30000]
       score_thresholds = [0.7,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6  ]
-      wh_thresholds    = [0,     0,     0,     0,     0,     0,     0,     0,     0,     2,     2,     2,     222,   2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     3,     0,     0,     0,     0,     0    ]
-      
+      wh_thresholds    = [0,     0,     0,     0,     0,     0,     0,     0,     0,     2,     2,     2,     222,   2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     3,     4,     5,     5,     5,     5    ]
+
       slots = (
             [f"A{i}" for i in range(1, 10)] +
             [f"B{i}" for i in range(1, 13)] +
@@ -347,9 +353,9 @@ def check_parking_slot_using_image():
         elif wh_thresholds[idx] == 4:    
             wh_test = width < 250 and height < 250 and (width * 2.5 > height) and (width < height * 2.5)  
         elif wh_thresholds[idx] == 5:    
-            wh_test = width < 250 and height < 250 and width < height * 2.5 and width > height    
+            wh_test = width < 300 and height < 250 and width < height * 2.5 and width > height    
         elif wh_thresholds[idx] == 222:    
-            wh_test = width < 250 and height < 250 and width < height * 1.5 and width * 1.5 > height
+            wh_test = width < 300 and height < 250 and width < height * 1.5 and width * 1.5 > height
         else:  # 가로 주차
             wh_test = width < 300 and height < 135 and width > height and width > height
 
