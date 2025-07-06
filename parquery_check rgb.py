@@ -1,3 +1,7 @@
+# 이미지에서 주차 검출
+#
+# 수정일: 2025. 07. 06
+
 import os
 # if using Apple MPS, fall back to CPU for unsupported ops
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
@@ -10,6 +14,7 @@ from supabase import create_client, Client
 from datetime import datetime
 import cv2
 import os
+from scipy.ndimage import label
 
 supabase_url = "https://cevsjxqctilqzaeqllqc.supabase.co"
 supabase_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNldnNqeHFjdGlscXphZXFsbHFjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcxNDc5MjMxMSwiZXhwIjoyMDMwMzY4MzExfQ.oaEtnfGqjcMhbvNTadlOlAEf6Wji6-Qi8H2HLetOe4o"
@@ -122,16 +127,18 @@ sam2_model = build_sam2(model_cfg, sam2_checkpoint, device=device)
 
 predictor = SAM2ImagePredictor(sam2_model)
 
-file_template = "frame_{:05d}.jpg"
-folder_path = 'D:/Projects/vision/yolo/images/mp4/parquery_frames/'
-folder_path = 'D:/Projects/vision/yolo/images/mp4/parquery_frames_night/'
-folder_completed_path = 'D:/Projects/vision/yolo/images/mp4/parquery1_2/'
-folder_completed_path = 'D:/Projects/vision/yolo/images/mp4/parquery1_4/'
-folder_completed_path = 'D:/Projects/vision/yolo/images/mp4/parquery_night2/'
+file_template = "parquery_frame_{:05d}.jpg"
+#folder_path = 'D:/Projects/vision/yolo/images/mp4/parquery_frames/'
+folder_path = 'D:/Projects/vision/yolo/images/mp4/parquery_frames_0706_2/'
+#folder_path = 'D:/Projects/vision/yolo/images/mp4/parquery_frames_night/'
+#folder_completed_path = 'D:/Projects/vision/yolo/images/mp4/parquery1_2/'
+#folder_completed_path = 'D:/Projects/vision/yolo/images/mp4/parquery1_4/'
+#folder_completed_path = 'D:/Projects/vision/yolo/images/mp4/parquery_night2/'
+folder_completed_path = 'D:/Projects/vision/yolo/images/mp4/parquery_0706_2_results_test/'
 
-start_index = 192000
-end_index = 292000
-index_step = 2000
+start_index = 0
+end_index = 4149
+index_step = 5    # 5 seconds
 
 def overlay_mask(base_image, mask, color=(30, 144, 255), alpha=0.6):
     """
@@ -221,12 +228,14 @@ def check_parking_slot_using_image():
       occupiedCount = 0 
       emptyCount = 0
 
+      #                   0      1      2      3      4      5      6      7      8       9     10     11     12     13     14     15     16     17     18     19     20     21     22     23     24     25     26     27     28     29     30     31     32     33     34     35     36     37
       #                   1      2      3      4      5      6      7      8      9      10     11     12     13     14     15     16     17     18     19     20     21     22     23     24     25     26     27     28     29     30     31     32     33     34     35     36     37     38
       #                   A1     A2     A3     A4     A5     A6     A7     A8     A9     B1     B2     B3     B4     B5     B6     B7     B8     B9     B10    B11    B12    C1     C2     C3     C4     C5     C6     C7     C8     C9     C10    C11    C12    D1     D2     D3     D4     D5
       lower_thresholds = [3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  1000,  1000,  1000,  1000,  1000,  1000,  1000 ]
       upper_thresholds = [15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 15000, 15000, 15000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 15000, 15000, 5000,  30000, 30000, 30000, 30000, 30000]
       score_thresholds = [0.7,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6  ]
-      wh_thresholds    = [0,     0,     0,     0,     0,     0,     0,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     0,     0,     0,     0,     0    ]
+      wh_thresholds    = [0,     0,     0,     0,     0,     0,     0,     0,     0,     2,     2,     2,     222,   2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,     3,     0,     0,     0,     0,     0    ]
+      
       slots = (
             [f"A{i}" for i in range(1, 10)] +
             [f"B{i}" for i in range(1, 13)] +
@@ -236,9 +245,11 @@ def check_parking_slot_using_image():
 
 
       second_point_for = {
-          12: [538, 276],  # idx=15(16번째) --> 두 번째 좌표는 [144, 303]
-          17: [1020, 303],  # idx=16(17번째) --> 두 번째 좌표는 [ 95, 277]
-          #2: [406, 123],  # idx=16(17번째) --> 두 번째 좌표는 [ 95, 277]
+        2: [474, 177],   # 
+        12: [538, 276],  # 
+        15: [924, 290],  # 
+        17: [1100, 289], # 
+        26: [839, 399],  # 
       }
 
       overlayed_image = np.array(image_pil.convert("RGB"))
@@ -290,7 +301,33 @@ def check_parking_slot_using_image():
         # (옵션) score threshold 불러오기
         score_thresh = score_thresholds[idx]
 
-        ys, xs = np.where(mask_2d > 0)  # or mask_2d == True
+        mask_bool = mask_2d.astype(bool)
+
+        # 4-연결성(상하좌우) 구조 정의
+        structure = np.array([[0, 1, 0],
+                            [1, 1, 1],
+                            [0, 1, 0]], dtype=bool)
+
+        # 1) 라벨링: 각 연결된 컴포넌트에 고유 번호 부여
+        labeled, num_features = label(mask_bool, structure=structure)
+
+        # 2) 컴포넌트별 픽셀 개수 계산
+        #    bincount 결과의 인덱스 i 는 라벨 번호, 값은 픽셀 수
+        counts = np.bincount(labeled.ravel())
+
+        # 3) 크기 > 30 인 컴포넌트만 마스크로 생성
+        #    counts[0] 은 배경(0) 픽셀 개수이므로 제외
+        large_labels = np.where(counts > 30)[0]
+        large_labels = large_labels[large_labels != 0]  # 0 라벨(배경) 제거
+
+        # 4) 최종 필터링: 크기 30 이하 컴포넌트 제거
+        #    np.isin 으로 남길 라벨만 True 로
+        filtered_mask_clean = np.isin(labeled, large_labels)
+
+        # 필요 시 원래 형태(bool) 유지
+        filtered_mask_clean = filtered_mask_clean.astype(bool)
+        
+        ys, xs = np.where(filtered_mask_clean > 0)  # or mask_2d == True
 
         if len(xs) == 0 or len(ys) == 0:
             width = 0
@@ -302,10 +339,19 @@ def check_parking_slot_using_image():
             height = y_max - y_min + 1
 
         if wh_thresholds[idx] == 1: # 세로 주차
-            # 너비와 높이의 비율을 체크
-            wh_test = width < 250 and height < 250 and width < height * 2
+            wh_test = width < 250 and height < 250 and width < height * 2 and width < height
+        elif wh_thresholds[idx] == 2:    
+            wh_test = width < 250 and height < 250 and width < height * 2 and (width * 2.5 > height) and (width < height * 2.5)
+        elif wh_thresholds[idx] == 3:    
+            wh_test = width < 250 and height < 250 and width < height * 2 and width < height    
+        elif wh_thresholds[idx] == 4:    
+            wh_test = width < 250 and height < 250 and (width * 2.5 > height) and (width < height * 2.5)  
+        elif wh_thresholds[idx] == 5:    
+            wh_test = width < 250 and height < 250 and width < height * 2.5 and width > height    
+        elif wh_thresholds[idx] == 222:    
+            wh_test = width < 250 and height < 250 and width < height * 1.5 and width * 1.5 > height
         else:  # 가로 주차
-            wh_test = width < 300 and height < 135 and width > height
+            wh_test = width < 300 and height < 135 and width > height and width > height
 
         masked_pixels = image_np[mask_2d.astype(bool)]  # shape: (N, 3)
         unique_colors = np.unique(masked_pixels, axis=0)
@@ -316,6 +362,40 @@ def check_parking_slot_using_image():
 
         aspect_ratio = width / height if height != 0 else 0
         y_center = ys.mean() if len(ys) > 0 else 0
+
+        # if idx == 35:
+        #     np.savetxt("mask_2d.csv", mask_2d, fmt="%d", delimiter=",")
+        #     img = Image.fromarray((mask_2d * 255).astype(np.uint8))
+        #     img.save("mask_2d.png")
+
+        #     # mask_bool = mask_2d.astype(bool)
+
+        #     # 4-연결성(상하좌우) 구조 정의
+        #     structure = np.array([[0, 1, 0],
+        #                         [1, 1, 1],
+        #                         [0, 1, 0]], dtype=bool)
+
+        #     # 1) 라벨링: 각 연결된 컴포넌트에 고유 번호 부여
+        #     labeled, num_features = label(mask_bool, structure=structure)
+
+        #     # 2) 컴포넌트별 픽셀 개수 계산
+        #     #    bincount 결과의 인덱스 i 는 라벨 번호, 값은 픽셀 수
+        #     counts = np.bincount(labeled.ravel())
+
+        #     # 3) 크기 > 30 인 컴포넌트만 마스크로 생성
+        #     #    counts[0] 은 배경(0) 픽셀 개수이므로 제외
+        #     large_labels = np.where(counts > 30)[0]
+        #     large_labels = large_labels[large_labels != 0]  # 0 라벨(배경) 제거
+
+        #     # 4) 최종 필터링: 크기 30 이하 컴포넌트 제거
+        #     #    np.isin 으로 남길 라벨만 True 로
+        #     filtered_mask_clean = np.isin(labeled, large_labels)
+
+        #     # 필요 시 원래 형태(bool) 유지
+        #     filtered_mask_clean = filtered_mask_clean.astype(bool)
+
+        #     img = Image.fromarray((filtered_mask_clean * 255).astype(np.uint8))
+        #     img.save("filtered_mask.png")
 
         if score_val >= score_thresh and pixel_count > lower and pixel_count < upper and wh_test and saturation_std > 10 and color_count > 1500:
             occupiedCount += 1
