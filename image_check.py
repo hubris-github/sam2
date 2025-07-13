@@ -1,3 +1,21 @@
+"""
+Python Image Viewer with Problem Marking
+This script provides a simple GUI application to view images in a selected folder.
+Users can navigate through images, mark them as problematic, and save the filenames of problematic images to a text file.
+
+Requirements:
+- Python 3.x
+- Tkinter (usually included with Python installations)
+- Pillow (for image handling, install via pip: `pip install Pillow`)
+
+Usage:
+1. Run the script.
+2. Click "Select Folder" to choose a directory containing images.
+3. Use the left and right arrow keys to navigate through images.
+4. Press the spacebar to mark the current image as problematic.
+5. The application will display a message at the bottom if the current image is marked as problematic.
+6. The filenames of problematic images will be saved in a file named `problems.txt` in the selected directory.
+"""
 import os
 import sys
 import tkinter as tk
@@ -8,7 +26,7 @@ class ImageViewer(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Python Image Viewer")
-        self.geometry("800x600")
+        self.geometry("1200x1050")
 
         # Initialize state
         self.image_dir = None
@@ -32,9 +50,9 @@ class ImageViewer(tk.Tk):
         self.problem_label.pack(side=tk.BOTTOM, fill=tk.X)
 
         # Bind navigation and action keys
-        # self.bind("<Left>", self.show_prev)
-        # self.bind("<Right>", self.show_next)
-        # self.bind("<space>", self.mark_problem)
+        self.bind("<Left>", self.show_prev)
+        self.bind("<Right>", self.show_next)
+        self.bind("<space>", self.mark_problem)
 
     def select_folder(self):
         # Open directory chooser
@@ -64,7 +82,7 @@ class ImageViewer(tk.Tk):
         path = self.image_paths[self.index]
         img = Image.open(path)
         w, h = img.size
-        max_w, max_h = 800, 600
+        max_w, max_h = 1200, 1050
         ratio = min(max_w / w, max_h / h)
         new_size = (int(w * ratio), int(h * ratio))
 
