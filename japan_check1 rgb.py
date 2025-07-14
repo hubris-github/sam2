@@ -505,7 +505,7 @@ def check_parking_slot_using_image():
                 print(f"idx+1: {idx+1}, wh_test                   = {wh_test}, width={width}, height={height}")
                 print(f"idx+1: {idx+1}, pt                        = {pt}")
 
-                if score_val >= score_thresh and pixel_count > lower and pixel_count < upper and wh_test and is_not_overlap_pixels and isPixelOverlappingLeft and isPixelOverlappingRight:        
+                if score_val >= score_thresh and pixel_count > lower and pixel_count < upper and wh_test and isPixelOverlappingLeft and isPixelOverlappingRight:        
                     
                     print(f"-" * 120)
                     print(f"idx+1: {idx+1}, [# OOO #] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, Score={score_val:.3f}, width={width}, height={height}")
