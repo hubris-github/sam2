@@ -26,7 +26,7 @@ class ImageViewer(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Python Image Viewer")
-        self.geometry("1200x1050")
+        self.geometry("1200x800")
 
         # Initialize state
         self.image_dir = None
@@ -52,6 +52,7 @@ class ImageViewer(tk.Tk):
         # Bind navigation and action keys
         self.bind("<Left>", self.show_prev)
         self.bind("<Right>", self.show_next)
+        self.bind("<Up>", self.mark_problem)
         self.bind("<space>", self.mark_problem)
 
     def select_folder(self):
@@ -82,7 +83,7 @@ class ImageViewer(tk.Tk):
         path = self.image_paths[self.index]
         img = Image.open(path)
         w, h = img.size
-        max_w, max_h = 1200, 1050
+        max_w, max_h = 1200, 800
         ratio = min(max_w / w, max_h / h)
         new_size = (int(w * ratio), int(h * ratio))
 

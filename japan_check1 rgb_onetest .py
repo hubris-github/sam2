@@ -19,6 +19,7 @@ import glob
 from scipy.ndimage import label
 import skimage.measure
 
+
 supabase_url = "https://cevsjxqctilqzaeqllqc.supabase.co"
 supabase_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNldnNqeHFjdGlscXphZXFsbHFjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcxNDc5MjMxMSwiZXhwIjoyMDMwMzY4MzExfQ.oaEtnfGqjcMhbvNTadlOlAEf6Wji6-Qi8H2HLetOe4o"
 supabase: Client = create_client(supabase_url, supabase_key)
@@ -154,6 +155,7 @@ def remove_small_components(mask_2d: np.ndarray,
     
     return mask_2d
 
+
 from sam2.build_sam import build_sam2
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 
@@ -168,10 +170,10 @@ predictor = SAM2ImagePredictor(sam2_model)
 file_template = "1_*.png" # 1_20250711_235044sshot
 #folder_path = 'D:/Projects/vision/yolo/images/mp4/japan/'
 folder_path = 'D:/Projects/vision/capture_images/20250710/'
-folder_completed_path = 'D:/Projects/vision/capture_images/20250710/completed4/'
+folder_completed_path = 'D:/Projects/vision/capture_images/20250710/completed5/'
 
 start_index = 0
-end_index = 1443
+end_index = 0 #1443
 index_step = 1
 
 def overlay_mask(base_image, mask, color=(30, 144, 255), alpha=0.6):
@@ -197,7 +199,23 @@ def check_parking_slot_using_image():
     for filename in files[start_index : end_index + 1 : index_step]:  
 
         # folder_file = folder_path + filename
-        # filename = folder_path + "1_20250711_121621sshot.png"
+        filename = folder_path + "1_20250711_012904sshot.png"
+        filename = folder_path + "1_20250711_051606sshot.png"
+        filename = folder_path + "1_20250711_031629sshot.png"
+        filename = folder_path + "1_20250711_031730sshot.png"
+        filename = folder_path + "1_20250711_034637sshot.png"
+        filename = folder_path + "1_20250711_042951sshot.png"
+        filename = folder_path + "1_20250711_091220sshot.png"
+        filename = folder_path + "1_20250711_115113sshot.png"
+        filename = folder_path + "1_20250711_121621sshot.png"
+        filename = folder_path + "1_20250711_131636sshot.png"
+        filename = folder_path + "1_20250711_134946sshot.png"
+        filename = folder_path + "1_20250711_161331sshot.png"
+        filename = folder_path + "1_20250711_173959sshot.png"
+        filename = folder_path + "1_20250711_194728sshot.png"
+        filename = folder_path + "1_20250711_202542sshot.png"
+        filename = folder_path + "1_20250711_210355sshot.png"
+        filename = folder_path + "1_20250711_225929sshot.png"
         
         print(f"Processing file: {filename}")
 
@@ -424,42 +442,61 @@ def check_parking_slot_using_image():
                 mask_2d = masks[0]
                 score_val = scores[0]
                 
+                # print("mask_2d shape:", mask_2d.shape, " dtype:", mask_2d.dtype)
+
+                # props = skimage.measure.regionprops(mask_2d.astype(int))
+                # ar = props[0].minor_axis_length / props[0].major_axis_length
+                # solidity = props[0].solidity
+
+                # print(f"idx: {idx}, solidity: {solidity:.3f}")
 
                 # 필터 영역 출력
-                # if idx == 14:
-                #     # np.savetxt("mask_2d.csv", mask_2d, fmt="%d", delimiter=",")
-                #     img = Image.fromarray((mask_2d * 255).astype(np.uint8))
-                #     img.save("mask_2d.png")
+                selected_idx = 16
+                if idx == selected_idx:
+                    # np.savetxt("mask_2d.csv", mask_2d, fmt="%d", delimiter=",")
+                    img = Image.fromarray((mask_2d * 255).astype(np.uint8))
+                    img.save("mask_2d.png")
 
-                #     # mask_bool = mask_2d.astype(bool)
+                    mask_bool = mask_2d.astype(bool)
 
-                #     # 4-연결성(상하좌우) 구조 정의
-                #     structure = np.array([[0, 1, 0],
-                #                         [1, 1, 1],
-                #                         [0, 1, 0]], dtype=bool)
+                    # 4-연결성(상하좌우) 구조 정의
+                    structure = np.array([[0, 1, 0],
+                                        [1, 1, 1],
+                                        [0, 1, 0]], dtype=bool)
 
-                #     # 1) 라벨링: 각 연결된 컴포넌트에 고유 번호 부여
-                #     labeled, num_features = label(mask_bool, structure=structure)
+                    # 1) 라벨링: 각 연결된 컴포넌트에 고유 번호 부여
+                    labeled, num_features = label(mask_bool, structure=structure)
 
-                #     # 2) 컴포넌트별 픽셀 개수 계산
-                #     #    bincount 결과의 인덱스 i 는 라벨 번호, 값은 픽셀 수
-                #     counts = np.bincount(labeled.ravel())
+                    # 2) 컴포넌트별 픽셀 개수 계산
+                    #    bincount 결과의 인덱스 i 는 라벨 번호, 값은 픽셀 수
+                    counts = np.bincount(labeled.ravel())
 
-                #     # 3) 크기 > 30 인 컴포넌트만 마스크로 생성
-                #     #    counts[0] 은 배경(0) 픽셀 개수이므로 제외
-                #     large_labels = np.where(counts > 30)[0]
-                #     large_labels = large_labels[large_labels != 0]  # 0 라벨(배경) 제거
+                    # 3) 크기 > 30 인 컴포넌트만 마스크로 생성
+                    #    counts[0] 은 배경(0) 픽셀 개수이므로 제외
+                    large_labels = np.where(counts > 0)[0]
+                    large_labels = large_labels[large_labels != 0]  # 0 라벨(배경) 제거
 
-                #     # 4) 최종 필터링: 크기 30 이하 컴포넌트 제거
-                #     #    np.isin 으로 남길 라벨만 True 로
-                #     filtered_mask_clean = np.isin(labeled, large_labels)
+                    # 4) 최종 필터링: 크기 30 이하 컴포넌트 제거
+                    #    np.isin 으로 남길 라벨만 True 로
+                    filtered_mask_clean = np.isin(labeled, large_labels)
 
-                #     # 필요 시 원래 형태(bool) 유지
-                #     filtered_mask_clean = filtered_mask_clean.astype(bool)
+                    # 필요 시 원래 형태(bool) 유지
+                    filtered_mask_clean = filtered_mask_clean.astype(bool)
 
-                #     img = Image.fromarray((filtered_mask_clean * 255).astype(np.uint8))
-                #     img.save("mask_2d_filterdd.png")
+                    # 방법 1: np.where 로 새 배열 만들기
+                    mask_2d = np.where(filtered_mask_clean, mask_2d, 0)
 
+                    # print("#mask_2d shape:", mask_2d.shape, " dtype:", mask_2d.dtype)
+                    # print("filtered mask_2d shape:", mask_2d.shape, "nonzero count:", np.count_nonzero(mask_2d))
+
+                    # 방법 2: in-place 인덱싱 (원본 배열 변경)
+                    # mask_2d = mask_2d.copy()            # 혹시 원본을 보존하고 싶다면
+                    # mask_2d[~filtered_mask_clean] = 0
+
+                    img = Image.fromarray((filtered_mask_clean * 255).astype(np.uint8))
+                    img.save("mask_2d_filtered.png")
+
+                # 500점 이하 노이즈 제거
                 mask_2d = remove_small_components(mask_2d, min_size=500)
 
                 ##########################################################
@@ -490,15 +527,17 @@ def check_parking_slot_using_image():
                         intersection = mask_uint8 & poly_mask
                         overlap_pixels = np.count_nonzero(intersection)     # 겹치는 픽셀 수
 
+                        print(f"idx+1: {idx+1}, (R1) overlap_pixels = {overlap_pixels}")
+
                         if overlap_pixels > 0:  # 오른쪽 주차면을 침범하면 안 될 경우, 침범하면 오류
                             # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
                             isPixelOverlappingRight = False
 
                         # 주차면에 자동차가 있다면, 왼쪽으로 침범해야 함
                         if idx in range(1, 7) or idx in range(18, 24): #  # 1 ~ 6 영역의 자동차가 있으면 왼쪽으로 침범해야 함
-                            # idx 18은 윗쪽의 맨 왼쪽 주차면이므로, rectangles_as_tuples2[1]을 사용
+                            # idx 18은 윗쪽의 맨 왼쪽 주차면이므로, rectangles_as_tuples2[2]을 사용
                             if idx == 18:
-                                rect_left_idx = np.array(rectangles_as_tuples2[1], dtype=np.int32)
+                                rect_left_idx = np.array(rectangles_as_tuples2[2], dtype=np.int32)
                             else:
                                 rect_left_idx = np.array(rectangles_as_tuples[idx-1], dtype=np.int32)
 
@@ -511,6 +550,8 @@ def check_parking_slot_using_image():
                             # 4) AND 연산하여 겹치는 픽셀 수 확인
                             intersection = mask_uint8 & poly_mask
                             overlap_pixels = np.count_nonzero(intersection)     # 겹치는 픽셀 수
+
+                            print(f"idx+1: {idx+1}, (L1) overlap_pixels = {overlap_pixels}")
 
                             if overlap_pixels == 0:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
                                 # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
@@ -530,6 +571,8 @@ def check_parking_slot_using_image():
                         intersection = mask_uint8 & poly_mask
                         overlap_pixels = np.count_nonzero(intersection)
 
+                        print(f"idx+1: {idx+1}, (L2) overlap_pixels = {overlap_pixels}")
+
                         if overlap_pixels > 0:  # 왼쪽 주차면을 침범하면 안 될 경우, 침범하면 오류
                             # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
                             isPixelOverlappingLeft = False
@@ -537,15 +580,15 @@ def check_parking_slot_using_image():
                             # 왼쪽에 있는 차량이 색상이 같은 경우 왼쪽으로 침범하는 경우가 있음.
                             if idx == 15 and vehicleDetected[idx-1]:
                                 # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
-                                isSpecialCase = True   
+                                isSpecialCase = True    
 
 
                         # 주차면에 자동차가 있다면, 오른쪽으로 침범해야 함
-                        if idx in range(10, 18) or idx in range(31, 37): #  # 10 ~ 16, 31 ~ 37 영역의 자동차가 있으면 오른쪽으로 침범해야 함
+                        if idx in range(10, 18) or idx in range(31, 37): #  # 10 ~ 17, 31 ~ 37 영역의 자동차가 있으면 오른쪽으로 침범해야 함
                             # 1) rect_right_idx: #2 영역의 좌표 (list of (x, y))
                             
-                            if idx == 17:  # idx 17은 윗쪽의 맨 오른쪽 주차면이므로, rectangles_as_tuples2[0]을 사용
-                                rect_right_idx = np.array(rectangles_as_tuples2[0], dtype=np.int32) 
+                            if idx == 17:  # idx 17은 윗쪽의 맨 오른쪽 주차면이므로, rectangles_as_tuples2[1]을 사용
+                                rect_right_idx = np.array(rectangles_as_tuples2[1], dtype=np.int32) 
                             else:
                                 rect_right_idx = np.array(rectangles_as_tuples[idx+1], dtype=np.int32)
 
@@ -559,10 +602,11 @@ def check_parking_slot_using_image():
                             intersection = mask_uint8 & poly_mask
                             overlap_pixels = np.count_nonzero(intersection)     # 겹치는 픽셀 수
 
-                            if overlap_pixels == 0:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
+                            print(f"idx+1: {idx+1}, (R2) overlap_pixels = {overlap_pixels}")
+
+                            if overlap_pixels == 0:  # 오른쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
                                 # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
                                 isPixelOverlappingRight = False
-                            
                             elif idx == 12:
                                 
                                 if overlap_pixels < 300:  # 오른쪽 주차면을 300픽셀 이상 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
@@ -588,9 +632,11 @@ def check_parking_slot_using_image():
                                 if overlap_pixels == 0:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
                                     # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
                                     isPixelOverlappingRight = False
+                                
+                                
+                            # 한 주차면에서 차량 검출 시 3개의 주차면을 차지하면 오류
+                            if idx == 16:  # idx 16에서 17의 오른쪽 영역(18)을 침범하면 안 됨, rectangles_as_tuples2[2]을 사용
 
-
-                            if idx == 16:  # idx 16에서 17의 오른쪽 영역을 침범하면 안 됨, rectangles_as_tuples2[0]을 사용
                                 rect_right_idx = np.array(rectangles_as_tuples2[0], dtype=np.int32) 
 
                                 # 2) 같은 크기의 빈 마스크 생성
@@ -620,6 +666,8 @@ def check_parking_slot_using_image():
                         # 4) AND 연산하여 겹치는 픽셀 수 확인
                         intersection = mask_uint8 & poly_mask
                         overlap_pixels = np.count_nonzero(intersection)     # 겹치는 픽셀 수
+
+                        print(f"idx+1: {idx+1}, (U) overlap_pixels = {overlap_pixels}")
 
                         if overlap_pixels == 0:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
                             # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
@@ -664,6 +712,7 @@ def check_parking_slot_using_image():
                 filtered_mask_clean = filtered_mask_clean.astype(bool)
                 # SAM2 버그로 검출된 영역과 별도로 점들이 생기는 문제가 있음(END)
                 
+                # ys, xs = np.where(filtered_mask_clean > 0)  # or mask_2d == True
                 ys, xs = np.where(mask_2d > 0)  # or mask_2d == True
 
                 if len(xs) == 0 or len(ys) == 0:
@@ -702,26 +751,25 @@ def check_parking_slot_using_image():
                 aspect_ratio = width / height if height != 0 else 0
                 y_center = ys.mean() if len(ys) > 0 else 0
 
-                # print(f"=" * 120)
-                # print(f"idx+1: {idx+1}, pixel_count               = {pixel_count}")
-                # print(f"idx+1: {idx+1}, score_val >= score_thresh = {score_val >= score_thresh}, {score_val}, {score_thresh}")
-                # print(f"idx+1: {idx+1}, pixel_count > lower       = {pixel_count > lower}, {pixel_count}, {lower}")
-                # print(f"idx+1: {idx+1}, pixel_count < upper       = {pixel_count < upper}, {pixel_count}, {upper}")
-                # print(f"idx+1: {idx+1}, isPixelOverlapping(L,R)   = {isPixelOverlappingLeft}, {isPixelOverlappingRight}")
-                # print(f"idx+1: {idx+1}, wh_test                   = {wh_test}, width={width}, height={height}")
-                # print(f"idx+1: {idx+1}, x, y, xmax, ymax          = {x_min}, {y_min}, {x_max}, {y_max}")
-                # print(f"idx+1: {idx+1}, 색상수, 채도편차          = {color_count}, {saturation_std:.2f}")
-                # print(f"idx+1: {idx+1}, pt                        = {pt}")
+                print(f"=" * 120)
+                print(f"idx+1: {idx+1}, pixel_count               = {pixel_count}")
+                print(f"idx+1: {idx+1}, score_val >= score_thresh = {score_val >= score_thresh}, {score_val}, {score_thresh}")
+                print(f"idx+1: {idx+1}, pixel_count > lower       = {pixel_count > lower}, {pixel_count}, {lower}")
+                print(f"idx+1: {idx+1}, pixel_count < upper       = {pixel_count < upper}, {pixel_count}, {upper}")
+                print(f"idx+1: {idx+1}, isPixelOverlapping(LRUS)  = {isPixelOverlappingLeft}, {isPixelOverlappingRight}, {isPixelOverlappingUp}, {isSpecialCase}")
+                print(f"idx+1: {idx+1}, wh_test                   = {wh_test}, width={width}, height={height}")
+                print(f"idx+1: {idx+1}, x, y, xmax, ymax          = {x_min}, {y_min}, {x_max}, {y_max}")
+                print(f"idx+1: {idx+1}, 색상수, 채도편차          = {color_count}, {saturation_std:.2f}")
+                print(f"idx+1: {idx+1}, pt                        = {pt}")
 
-                if score_val >= score_thresh and pixel_count > lower and pixel_count < upper  and isPixelOverlappingUp and isPixelOverlappingRight and ((isPixelOverlappingLeft and wh_test) or isSpecialCase):
+                if score_val >= score_thresh and pixel_count > lower and pixel_count < upper and isPixelOverlappingUp and isPixelOverlappingRight and ((isPixelOverlappingLeft and wh_test) or isSpecialCase):
                     
                     vehicleDetected[idx] = True
-                    
-                    # print(f"-" * 120)
-                    # print(f"idx+1: {idx+1}, [# OOO #] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, Score={score_val:.3f}, width={width}, height={height}")
-                    # print(f"=-" * 60)
-                    # print(f" " * 10)
-                    # print(f" " * 10)
+                    print(f"-" * 120)
+                    print(f"idx+1: {idx+1}, [# OOO #] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, Score={score_val:.3f}, width={width}, height={height}")
+                    print(f"=-" * 60)
+                    print(f" " * 10)
+                    print(f" " * 10)
                     ### print(f"idx+1: {idx}, [O] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, 색상수={color_count}, 채도편차={saturation_std:.2f}, 비율={aspect_ratio:.2f}")
 
                     occupiedCount += 1
@@ -749,17 +797,18 @@ def check_parking_slot_using_image():
                     ## print(f"idx+1: {idx+1}, wh_test                  ={wh_test}, width={width}, height={height}")                    
                     ## print(f"idx+1: {idx+1}, is_overlap_pixels        ={is_overlap_pixels}")
                     ## print(f"idx+1: {idx+1}, pt                       ={pt}")
-                    # print(f"-" * 120)
-                    # print(f"idx+1: {idx+1}, [# XXX #] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, Score={score_val:.3f}, width={width}, height={height}, 색상수={color_count}, 채도편차={saturation_std:.2f}, 비율={aspect_ratio:.2f}")
-                    # print(f"=-" * 60)
-                    # print(f" " * 10)
-                    # print(f" " * 10)
+                    print(f"-" * 120)
+                    print(f"idx+1: {idx+1}, [# XXX #] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, Score={score_val:.3f}, width={width}, height={height}, 색상수={color_count}, 채도편차={saturation_std:.2f}, 비율={aspect_ratio:.2f}")
+                    print(f"=-" * 60)
+                    print(f" " * 10)
+                    print(f" " * 10)
 
 
                     emptyCount += 1
 
                     if pixel_count < 50000:
-                        # output_image = overlay_mask(output_image, mask_2d, color=(255, 144, 30), alpha=0.1)
+                        if idx == selected_idx:
+                            output_image = overlay_mask(output_image, mask_2d, color=(255, 0, 0), alpha=0.5)
                         output_pil = Image.fromarray(output_image)
                         draw = ImageDraw.Draw(output_pil)  # draw 다시 초기화 필요 (PIL 객체 변경됐기 때문)
 

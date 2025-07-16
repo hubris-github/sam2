@@ -17,7 +17,22 @@ from datetime import datetime
 import cv2
 import glob
 from scipy.ndimage import label
-import skimage.measure
+from transformers import CLIPProcessor, CLIPModel
+import torch
+
+# 1) 모델 로드
+model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+# processor = CLIPProcessor.from_pretrained(
+#     "openai/clip-vit-base-patch32",
+#     use_fast=True
+# )
+
+model.eval()
+
+# 2) 사전 정의된 텍스트 라벨 목록 (예시)
+labels = ["car", "parking space"]
+
 
 supabase_url = "https://cevsjxqctilqzaeqllqc.supabase.co"
 supabase_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNldnNqeHFjdGlscXphZXFsbHFjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcxNDc5MjMxMSwiZXhwIjoyMDMwMzY4MzExfQ.oaEtnfGqjcMhbvNTadlOlAEf6Wji6-Qi8H2HLetOe4o"
@@ -50,6 +65,49 @@ elif device.type == "mps":
     )
 
 np.random.seed(3)
+
+
+def crop_masked_region(image: Image.Image, mask: np.ndarray) -> Image.Image:
+    """
+    image: PIL Image (RGB)
+    mask:  2D numpy array (H×W), 바이너리(0/1) 마스크
+    returns: 투명 배경이 적용된 잘린 PIL Image (RGBA)
+    """
+    # 1) RGBA로 변환 후 알파 채널에 mask 적용
+    rgba = image.convert("RGBA")
+    arr = np.array(rgba)
+    arr[..., 3] = (mask * 255).astype(np.uint8)
+    masked = Image.fromarray(arr)
+
+    # 2) 마스크가 1인 픽셀 영역의 최소 바운딩 박스 계산
+    ys, xs = np.where(mask > 0)
+    if len(xs) == 0 or len(ys) == 0:
+        return masked  # 마스크가 비어 있을 때는 전체 이미지 리턴
+    x0, x1 = xs.min(), xs.max()
+    y0, y1 = ys.min(), ys.max()
+
+    # 3) 바운딩 박스에 맞춰 크롭
+    return masked.crop((x0, y0, x1 + 1, y1 + 1))
+
+def classify_with_clip(image_region: Image.Image, labels: list[str]):
+    # 1) 텍스트 토큰화
+    text_inputs = processor(text=labels, images=None, return_tensors="pt", padding=True)
+    # 2) 이미지 전처리
+    image_inputs = processor(text=None, images=image_region, return_tensors="pt")
+    # 3) 모델에 입력
+    with torch.no_grad():
+        text_features = model.get_text_features(**text_inputs)      # (N_labels, D)
+        image_features = model.get_image_features(**image_inputs)   # (1, D)
+
+    # 4) 정규화 후 유사도 계산
+    text_feats = text_features / text_features.norm(dim=-1, keepdim=True)
+    img_feats  = image_features / image_features.norm(dim=-1, keepdim=True)
+    # (1, D) × (D, N_labels)  → (1, N_labels)
+    logits = (img_feats @ text_feats.T).squeeze(0)
+
+    # 5) 최고점 라벨
+    best_idx = logits.argmax().item()
+    return labels[best_idx], logits.softmax(dim=-1)[best_idx].item()
 
 def show_mask(mask, ax, random_color=False, borders = True):
     
@@ -119,41 +177,6 @@ def update_parking_slot_status(supabase, parking_lot_id, status, slot):
         return None
 
 
-def remove_small_components(mask_2d: np.ndarray,
-                            min_size: int = 500,
-                            connectivity: np.ndarray = None) -> np.ndarray:
-    
-    mask_bool = mask_2d.astype(bool)
-
-    # 4-연결성(상하좌우) 구조 정의
-    structure = np.array([[0, 1, 0],
-                        [1, 1, 1],
-                        [0, 1, 0]], dtype=bool)
-
-    # 1) 라벨링: 각 연결된 컴포넌트에 고유 번호 부여
-    labeled, num_features = label(mask_bool, structure=structure)
-
-    # 2) 컴포넌트별 픽셀 개수 계산
-    #    bincount 결과의 인덱스 i 는 라벨 번호, 값은 픽셀 수
-    counts = np.bincount(labeled.ravel())
-
-    # 3) 크기 > 30 인 컴포넌트만 마스크로 생성
-    #    counts[0] 은 배경(0) 픽셀 개수이므로 제외
-    large_labels = np.where(counts > 500)[0]
-    large_labels = large_labels[large_labels != 0]  # 0 라벨(배경) 제거
-
-    # 4) 최종 필터링: 크기 30 이하 컴포넌트 제거
-    #    np.isin 으로 남길 라벨만 True 로
-    filtered_mask_clean = np.isin(labeled, large_labels)
-
-    # 필요 시 원래 형태(bool) 유지
-    filtered_mask_clean = filtered_mask_clean.astype(bool)
-
-    # 방법 1: np.where 로 새 배열 만들기
-    mask_2d = np.where(filtered_mask_clean, mask_2d, 0)
-    
-    return mask_2d
-
 from sam2.build_sam import build_sam2
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 
@@ -168,10 +191,10 @@ predictor = SAM2ImagePredictor(sam2_model)
 file_template = "1_*.png" # 1_20250711_235044sshot
 #folder_path = 'D:/Projects/vision/yolo/images/mp4/japan/'
 folder_path = 'D:/Projects/vision/capture_images/20250710/'
-folder_completed_path = 'D:/Projects/vision/capture_images/20250710/completed4/'
+folder_completed_path = 'D:/Projects/vision/capture_images/20250710/completed3/'
 
 start_index = 0
-end_index = 1443
+end_index = 0 #1443
 index_step = 1
 
 def overlay_mask(base_image, mask, color=(30, 144, 255), alpha=0.6):
@@ -197,7 +220,7 @@ def check_parking_slot_using_image():
     for filename in files[start_index : end_index + 1 : index_step]:  
 
         # folder_file = folder_path + filename
-        # filename = folder_path + "1_20250711_121621sshot.png"
+        filename = folder_path + "1_20250711_005154sshot.png"
         
         print(f"Processing file: {filename}")
 
@@ -228,7 +251,7 @@ def check_parking_slot_using_image():
                 [63, 626],  #3
                 [123, 633], #4
                 [190, 688], #5
-                [262, 697], #6
+                [270, 708], #6
                 [384, 724], #7
                 [500, 727], #8
                 [646, 744], #9
@@ -237,30 +260,30 @@ def check_parking_slot_using_image():
                 [1054, 696], #12
                 [1149, 696], #13
                 [1237, 659], #14
-                [1324, 670], #15 
-                [1382, 652], #16 (idx 15)
+                [1324, 670], #15
+                [1371, 641], #16
                 [1405, 632], #17
                 [1400, 567], #18
 
-                [160, 435],  #19 (1)
-                [188, 442],  #20 (2)
-                [245, 455],  #21 (3)
-                [308, 453],  #22 (4)  
-                [371, 445],  #23 (5)
-                [445, 451],  #24 (6)
-                [513, 440],  #25 (7)
-                [603, 456],  #26 (8)
-                [687, 461],  #27 (9)
-                [776, 462],  #28 (10)
-                [862, 465],  #29 (11)
-                [948, 453],  #30 (12)
-                [1020, 463], #31 (13)
-                [1085, 461], #32 (14)
-                [1158, 464], #33 (15)
-                [1211, 465], #34 (16)
-                [1266, 454], #35 (17)
-                [1307, 459], #36 (18)
-                [1340, 445], #37 (19) (idx 36)
+                [160, 450],  #19
+                [188, 442],  #20
+                [245, 455],  #21
+                [308, 453],  #22
+                [371, 445],  #23
+                [445, 451],  #24
+                [513, 440],  #25
+                [603, 456],  #26
+                [687, 461],  #27
+                [776, 462],  #28
+                [862, 465], #29
+                [948, 453], #30
+                [1020, 463], #31
+                [1085, 461], #32
+                [1158, 464], #33
+                [1211, 465], #34
+                [1266, 454], #35
+                [1307, 459], #36
+                [1349, 451], #37(idx 36)
             ])
             
             input_label = np.array([1])  # 양성(1)으로 설정
@@ -273,34 +296,33 @@ def check_parking_slot_using_image():
             #                   0      1      2      3      4      5      6      7      8       9     10     11     12     13     14     15     16     17     18     19     20     21     22     23     24     25     26     27     28     29     30     31     32     33     34     35     36     37
             #                   1      2      3      4      5      6      7      8      9      10     11     12     13     14     15     16     17     18     19     20     21     22     23     24     25     26     27     28     29     30     31     32     33     34     35     36     37     38
             #                   A1     A2     A3     A4     A5     A6     A7     A8     A9     B1     B2     B3     B4     B5     B6     B7     B8     B9     B10    B11    B12    C1     C2     C3     C4     C5     C6     C7     C8     C9     C10    C11    C12    D1     D2     D3     D4     D5
-            lower_thresholds = [2000,  5000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3500,  3500,  3500,  3500,  3000,  2500,  1500,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  1500 ]
+            lower_thresholds = [2000,  5000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3500,  3500,  3500,  3500,  3500,  3500,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000 ]
             upper_thresholds = [10000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 30000, 30000, 30000, 30000, 30000]
-            score_thresholds = [0.7,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.4,   0.6,   0.5,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6  ]
+            score_thresholds = [0.7,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6  ]
             wh_thresholds    = [1,     1,     1,     2,     2,     2,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     2,     2,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1    ]
-            vehicleDetected  = [False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False]
-            width_thresholds = [90,    160,   160,   160,   160,   160,   160,   140,   150,   130,   150,   150,   150,   145,   140,   130,   120,   70,    110,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   110,   110,   0    ]
-            height_thresholds= [160,   160,   160,   160,   160,   160,   160,   160,   220,   220,   220,   220,   170,   150,   150,   150,   150,   100,   110,   130,   130,   140,   140,   140,   140,   150,   150,   150,   150,   140,   140,   140,   130,   130,   120,   120,   120,   0    ]
+            width_thresholds = [80,    160,   160,   160,   160,   160,   160,   130,   130,   130,   130,   130,   130,   140,   130,   120,   120,   70,    110,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   110,   110,   110,   110,   110,   110,   0  ]
+            height_thresholds= [160,   160,   160,   160,   160,   160,   160,   160,   180,   180,   180,   180,   160,   150,   150,   150,   150,   100,   110,   130,   130,   140,   140,   140,   140,   150,   150,   150,   150,   140,   140,   140,   130,   130,   120,   120,   120,   0  ]
             wh_direction     = [-1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    0,     0,     0,     1,     1,     1,     1,     1,     1,     1,     -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    0,     0,     0,     1,     1,     1,     1,     1,     1,     1,     1,     1    ]
             slots = [f"A{i}" for i in range(1, 13)] + [f"B{i}" for i in range(1, 13)]
             rectangles_as_tuples = [
-                [(53, 529), (1, 581), (11, 614), (78, 538)],      # 1 (idx 0)
-                [(88, 542), (18, 619), (42, 634), (121, 549)],    # 2
-                [(127, 554), (53, 641), (85, 658), (166, 562)],   # 3
-                [(182, 564), (98, 665), (124, 675), (207, 576)],  # 4
-                [(236, 578), (153, 691), (209, 712), (293, 590)], # 5 (idx 4)
-                [(311, 596), (227, 719), (304, 742), (383, 607)], # 6
-                [(398, 606), (323, 746), (416, 763), (478, 616)], # 7
-                [(502, 619), (450, 747), (558, 748), (589, 625)], # 8
+                [(53, 529), (1, 581), (11, 614), (78, 538)], 
+                [(88, 542), (18, 619), (42, 634), (121, 549)],
+                [(127, 554), (53, 641), (85, 658), (166, 562)],
+                [(182, 564), (98, 665), (138, 683), (222, 576)],
+                [(236, 578), (153, 691), (209, 712), (293, 590)], #5
+                [(311, 596), (227, 719), (2990, 742), (378, 604)],
+                [(398, 606), (323, 746), (416, 763), (478, 616)],
+                [(502, 619), (450, 747), (558, 748), (589, 625)],
                 [(617, 629), (580, 796), (698, 807), (712, 633)], # 9
                 [(737, 633), (735, 801), (853, 802), (833, 634)], #10
-                [(860, 632), (889, 802), (996, 791), (950, 630)],     # 11
-                [(974, 628), (1026, 786), (1117, 767), (1053, 623)],  # 12
-                [(1075, 620), (1141, 762), (1215, 743), (1144, 613)], # 13
+                [(860, 632), (889, 802), (996, 791), (950, 630)],
+                [(974, 628), (1026, 786), (1117, 767), (1053, 623)],
+                [(1075, 620), (1141, 762), (1215, 743), (1144, 613)], 
                 [(1162, 609), (1234, 736), (1292, 717), (1218, 602)], # 14
                 [(1234, 599), (1308, 711), (1350, 693), (1280, 591)], # 15
                 [(1293, 588), (1362, 686), (1395, 669), (1330, 579)], # 16
                 [(1339, 575), (1405, 664), (1428, 649), (1371, 570)], # 17
-                [(1379, 566), (1428, 630), (1429, 594), (1401, 560)], # 18(우끝)
+                [(1379, 566), (1428, 630), (1628, 591), (1404, 560)], # 18(우끝)
                 
                 [(198, 402), (138, 455), (167, 457), (228, 405)], # 19
                 [(233, 404), (175, 458), (210, 459), (272, 408)], # 20
@@ -318,59 +340,16 @@ def check_parking_slot_using_image():
                 [(1033, 425), (1078, 486), (1131, 487), (1080, 426)], # 32
                 [(1095, 426), (1146, 485), (1191, 485), (1136, 427)], # 33
                 [(1150, 426), (1203, 482), (1241, 481), (1186, 427)], # 34
-                [(1199, 429), (1253, 480), (1287, 480), (1229, 428)], # 35
-                [(1252, 429), (1303, 479), (1348, 476), (1296, 427)], # 36
+                [(1199, 426), (1253, 480), (1287, 480), (1231, 425)], # 35
+                [(1254, 424), (1304, 477), (1331, 476), (1279, 425)], # 36
                 [(1297, 423), (1353, 473), (1374, 471), (1326, 426)], # 37
                 [(1326, 425), (1374, 471), (1400, 467), (1356, 422)], # 38 (임시로)
-            ]
-
-            upanddown_as_tuples = [
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #1 (0)
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #2 (1)
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #3 (2)                
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #4 (3)
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #5 (4)
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #6 (5)
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #7 (6)
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #8 (7)
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #9 (8)
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #10 (9)
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #11 (10)
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #12 (11)
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #13 (12)
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #14 (13)
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #15 (14)
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #16 (15)
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #17 (16)
-                [(0, 0), (0, 0), (0, 0), (0, 0)], #18 (17)
-                
-                [(166, 371), (166, 402), (182, 402), (182, 371)], # 19 (18)
-                [(203, 371), (203, 404), (225, 404), (225, 371)], # 20 (19)
-                [(272, 371), (272, 403), (318, 403), (318, 371)], # 21 (20)
-                [(315, 371), (315, 403), (337, 403), (337, 371)], # 22 (21)
-                [(350, 371), (350, 403), (372, 403), (372, 371)], # 23 (22)
-                [(424, 371), (424, 401), (455, 401), (455, 371)], # 24 (23)
-                [(471, 371), (471, 404), (501, 404), (501, 371)], # 25 (24)
-                [(579, 371), (579, 418), (623, 418), (623, 371)], # 26 (25)
-                [(665, 371), (665, 419), (695, 419), (695, 371)], # 27 (26) 
-                [(740, 371), (740, 406), (802, 406), (802, 371)], # 28 (27)
-                [(825, 371), (825, 406), (850, 406), (850, 371)], # 29 (28)
-                [(895, 371), (895, 406), (956, 406), (956, 371)], # 30 (29)
-                [(976, 392), (976, 412), (1023,412), (1023,392)], # 31 (30) 
-                [(1052,392), (1052,412), (1088,412), (1088,392)], # 32 (31) ##
-                [(1104,395), (1104,411), (1155,411), (1155,395)], # 33 (32) 
-                [(1187,398), (1187,411), (1195,411), (1195,398)], # 34 (33)
-                [(1249,393), (1249,402), (1275,413), (1275,393)], # 35 (34)
-                [(1300,397), (1300,417), (1304,417), (1304,397)], # 36 (35)
-                [(1318,397), (1318,417), (1351,417), (1351,397)], # 37 (36)
-                [(1354,397), (1354,417), (1374,417), (1374,397)], # 38 (37) (임시로)
             ]
 
             # idx 18 ~ 37(여기 18면에는 왼쪽 면이 없으므로 임시로 왼쪽면을 만들어 줌.)
             # idx 0 ~ 17 
             rectangles_as_tuples2 = [
-                [(1352, 569), (1419, 657), (1429, 651), (1368, 568)], # idx 15(#16)
-                [(1404, 556), (1427, 573), (1427, 558), (1422, 548)], # idx 17(#18)
+                [(1404, 556), (1426, 580), (1427, 558), (1422, 548)], # idx 17(#18)
                 [(166, 388), (106, 447), (129, 451), (189, 405)], # idx 18(#19)
             ]
 
@@ -378,13 +357,7 @@ def check_parking_slot_using_image():
             second_point_for = {
                 #12: [538, 276],  # idx=15(16번째) --> 두 번째 좌표는 [144, 303]
                 #17: [1020, 303],  # idx=16(17번째) --> 두 번째 좌표는 [ 95, 277]
-                 6: [420, 635],
-                 9: [795, 660],
-                16: [1385, 569],
-                19: [250, 410],
-                22: [400, 415],
-                27: [770, 425],
-                29: [936, 426],
+                30: [929, 428],
             }
 
             overlayed_image = np.array(image_pil.convert("RGB"))
@@ -426,41 +399,44 @@ def check_parking_slot_using_image():
                 
 
                 # 필터 영역 출력
-                # if idx == 14:
-                #     # np.savetxt("mask_2d.csv", mask_2d, fmt="%d", delimiter=",")
-                #     img = Image.fromarray((mask_2d * 255).astype(np.uint8))
-                #     img.save("mask_2d.png")
+                if idx == 14:
+                    # np.savetxt("mask_2d.csv", mask_2d, fmt="%d", delimiter=",")
+                    img = Image.fromarray((mask_2d * 255).astype(np.uint8))
+                    img.save("mask_2d.png")
 
-                #     # mask_bool = mask_2d.astype(bool)
+                    # mask_bool = mask_2d.astype(bool)
 
-                #     # 4-연결성(상하좌우) 구조 정의
-                #     structure = np.array([[0, 1, 0],
-                #                         [1, 1, 1],
-                #                         [0, 1, 0]], dtype=bool)
+                    # 4-연결성(상하좌우) 구조 정의
+                    structure = np.array([[0, 1, 0],
+                                        [1, 1, 1],
+                                        [0, 1, 0]], dtype=bool)
 
-                #     # 1) 라벨링: 각 연결된 컴포넌트에 고유 번호 부여
-                #     labeled, num_features = label(mask_bool, structure=structure)
+                    # 1) 라벨링: 각 연결된 컴포넌트에 고유 번호 부여
+                    labeled, num_features = label(mask_bool, structure=structure)
 
-                #     # 2) 컴포넌트별 픽셀 개수 계산
-                #     #    bincount 결과의 인덱스 i 는 라벨 번호, 값은 픽셀 수
-                #     counts = np.bincount(labeled.ravel())
+                    # 2) 컴포넌트별 픽셀 개수 계산
+                    #    bincount 결과의 인덱스 i 는 라벨 번호, 값은 픽셀 수
+                    counts = np.bincount(labeled.ravel())
 
-                #     # 3) 크기 > 30 인 컴포넌트만 마스크로 생성
-                #     #    counts[0] 은 배경(0) 픽셀 개수이므로 제외
-                #     large_labels = np.where(counts > 30)[0]
-                #     large_labels = large_labels[large_labels != 0]  # 0 라벨(배경) 제거
+                    # 3) 크기 > 30 인 컴포넌트만 마스크로 생성
+                    #    counts[0] 은 배경(0) 픽셀 개수이므로 제외
+                    large_labels = np.where(counts > 30)[0]
+                    large_labels = large_labels[large_labels != 0]  # 0 라벨(배경) 제거
 
-                #     # 4) 최종 필터링: 크기 30 이하 컴포넌트 제거
-                #     #    np.isin 으로 남길 라벨만 True 로
-                #     filtered_mask_clean = np.isin(labeled, large_labels)
+                    # 4) 최종 필터링: 크기 30 이하 컴포넌트 제거
+                    #    np.isin 으로 남길 라벨만 True 로
+                    filtered_mask_clean = np.isin(labeled, large_labels)
 
-                #     # 필요 시 원래 형태(bool) 유지
-                #     filtered_mask_clean = filtered_mask_clean.astype(bool)
+                    # 필요 시 원래 형태(bool) 유지
+                    filtered_mask_clean = filtered_mask_clean.astype(bool)
 
-                #     img = Image.fromarray((filtered_mask_clean * 255).astype(np.uint8))
-                #     img.save("mask_2d_filterdd.png")
+                    img = Image.fromarray((filtered_mask_clean * 255).astype(np.uint8))
+                    img.save("mask_2d_filterdd.png")
 
-                mask_2d = remove_small_components(mask_2d, min_size=500)
+                orig = Image.open(filename)
+                region = crop_masked_region(orig, mask_2d)
+                label_name, confidence = classify_with_clip(region, labels)
+                print(f"idx+1: {idx+1}, Detected as {label_name} ({confidence*100:.1f}% confidence)")
 
                 ##########################################################
                 #
@@ -468,10 +444,8 @@ def check_parking_slot_using_image():
                 #
                 ##########################################################
 
-                isPixelOverlappingUp = True
                 isPixelOverlappingRight = True
                 isPixelOverlappingLeft = True
-                isSpecialCase = False
 
                 if idx > 0:     # 0번째는 왼쪽에 붙어 있으므로 제외, 1번째 인덱스부터 시작
                     mask_uint8 = mask_2d.astype(np.uint8)
@@ -517,7 +491,10 @@ def check_parking_slot_using_image():
                                 isPixelOverlappingLeft = False
 
 
-                    elif idx in range(10, 18) or idx in range(28, 37):   # 10~17, 28~36 영역의 자동차가 왼쪽 면에 붙으면 안 됨
+                    # else:
+                    #     print(f"idx: {idx+1}, ✅ 겹침 없음")
+
+                    elif idx in range(10, 18) or idx in range(28, 36):   # 10~17, 28~35 영역의 자동차가 왼쪽 면에 붙으면 안 됨
                         rect_left_idx = np.array(rectangles_as_tuples[idx-1], dtype=np.int32)
 
                         # 1) 같은 크기의 빈 마스크 생성
@@ -533,15 +510,11 @@ def check_parking_slot_using_image():
                         if overlap_pixels > 0:  # 왼쪽 주차면을 침범하면 안 될 경우, 침범하면 오류
                             # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
                             isPixelOverlappingLeft = False
-
-                            # 왼쪽에 있는 차량이 색상이 같은 경우 왼쪽으로 침범하는 경우가 있음.
-                            if idx == 15 and vehicleDetected[idx-1]:
-                                # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
-                                isSpecialCase = True   
-
+                        # else:
+                        #     print(f"idx: {idx+1}, ✅ 겹침 없음")
 
                         # 주차면에 자동차가 있다면, 오른쪽으로 침범해야 함
-                        if idx in range(10, 18) or idx in range(31, 37): #  # 10 ~ 16, 31 ~ 37 영역의 자동차가 있으면 오른쪽으로 침범해야 함
+                        if idx in range(10, 18) or idx in range(31, 37): #  # 10 ~ 16, 31 ~ 36 영역의 자동차가 있으면 오른쪽으로 침범해야 함
                             # 1) rect_right_idx: #2 영역의 좌표 (list of (x, y))
                             
                             if idx == 17:  # idx 17은 윗쪽의 맨 오른쪽 주차면이므로, rectangles_as_tuples2[0]을 사용
@@ -562,69 +535,7 @@ def check_parking_slot_using_image():
                             if overlap_pixels == 0:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
                                 # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
                                 isPixelOverlappingRight = False
-                            
-                            elif idx == 12:
-                                
-                                if overlap_pixels < 300:  # 오른쪽 주차면을 300픽셀 이상 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
-                                    # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
-                                    isPixelOverlappingRight = False
-
-                            elif idx == 15:
-                                
-                                rect_right_idx = np.array(rectangles_as_tuples2[0], dtype=np.int32) 
-
-                                # 2) 같은 크기의 빈 마스크 생성
-                                poly_mask = np.zeros_like(mask_2d, dtype=np.uint8)
-
-                                # 3) 사각형(다각형) 내부를 1로 채우기
-                                cv2.fillPoly(poly_mask, [rect_right_idx], 1)
-
-                                # 4) AND 연산하여 겹치는 픽셀 수 확인
-                                intersection = mask_uint8 & poly_mask
-                                overlap_pixels = np.count_nonzero(intersection)     # 겹치는 픽셀 수
-
-                                print(f"idx+1: {idx+1}, overlap_pixels = {overlap_pixels}")
-
-                                if overlap_pixels == 0:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
-                                    # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
-                                    isPixelOverlappingRight = False
-
-
-                            if idx == 16:  # idx 16에서 17의 오른쪽 영역을 침범하면 안 됨, rectangles_as_tuples2[0]을 사용
-                                rect_right_idx = np.array(rectangles_as_tuples2[0], dtype=np.int32) 
-
-                                # 2) 같은 크기의 빈 마스크 생성
-                                poly_mask = np.zeros_like(mask_2d, dtype=np.uint8)
-
-                                # 3) 사각형(다각형) 내부를 1로 채우기
-                                cv2.fillPoly(poly_mask, [rect_right_idx], 1)
-
-                                # 4) AND 연산하여 겹치는 픽셀 수 확인
-                                intersection = mask_uint8 & poly_mask
-                                overlap_pixels = np.count_nonzero(intersection)     # 겹치는 픽셀 수
-
-                                if overlap_pixels > 0:  # 2칸 건너 주차면을 침범하면 안 됨
-                                    # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
-                                    isPixelOverlappingRight = False
-
-                    # 자동차가 검출되었으면 윗쪽 영역을 침범해야 함                
-                    if idx in range(18, 37):        # 18~36 자동차가 있으면 주차선 윗쪽으로 자동차가 침범해야 함
-                        rect_up_idx = np.array(upanddown_as_tuples[idx], dtype=np.int32)
-
-                        # 2) 같은 크기의 빈 마스크 생성
-                        poly_mask = np.zeros_like(mask_2d, dtype=np.uint8)
-
-                        # 3) 사각형(다각형) 내부를 1로 채우기
-                        cv2.fillPoly(poly_mask, [rect_up_idx], 1)
-
-                        # 4) AND 연산하여 겹치는 픽셀 수 확인
-                        intersection = mask_uint8 & poly_mask
-                        overlap_pixels = np.count_nonzero(intersection)     # 겹치는 픽셀 수
-
-                        if overlap_pixels == 0:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
-                            # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
-                            isPixelOverlappingUp = False
-
+                
                 pixel_count = np.count_nonzero(mask_2d)
                 pixel_count2 = mask_2d.sum()
 
@@ -641,8 +552,8 @@ def check_parking_slot_using_image():
                 # SAM2 버그로 검출된 영역과 별도로 점들이 생기는 문제가 있음(BEGIN)
                 # 4-연결성(상하좌우) 구조 정의
                 structure = np.array([[0, 1, 0],
-                                      [1, 1, 1],
-                                      [0, 1, 0]], dtype=bool)
+                                    [1, 1, 1],
+                                    [0, 1, 0]], dtype=bool)
 
                 # 1) 라벨링: 각 연결된 컴포넌트에 고유 번호 부여
                 labeled, num_features = label(mask_bool, structure=structure)
@@ -653,7 +564,7 @@ def check_parking_slot_using_image():
 
                 # 3) 크기 > 30 인 컴포넌트만 마스크로 생성
                 #    counts[0] 은 배경(0) 픽셀 개수이므로 제외
-                large_labels = np.where(counts > 0)[0]
+                large_labels = np.where(counts > 30)[0]
                 large_labels = large_labels[large_labels != 0]  # 0 라벨(배경) 제거
 
                 # 4) 최종 필터링: 크기 30 이하 컴포넌트 제거
@@ -664,7 +575,7 @@ def check_parking_slot_using_image():
                 filtered_mask_clean = filtered_mask_clean.astype(bool)
                 # SAM2 버그로 검출된 영역과 별도로 점들이 생기는 문제가 있음(END)
                 
-                ys, xs = np.where(mask_2d > 0)  # or mask_2d == True
+                ys, xs = np.where(filtered_mask_clean > 0)  # or mask_2d == True
 
                 if len(xs) == 0 or len(ys) == 0:
                     width = 0   
@@ -677,51 +588,33 @@ def check_parking_slot_using_image():
 
                 wh_test = width < width_thresholds[idx] and height < height_thresholds[idx] 
 
-                # (5) mask_2d를 bool로 변환한 뒤, filtered_mask_clean과 AND 연산
-                mask_bool = mask_2d.astype(bool) & filtered_mask_clean
-
-                # bool 마스크를 이용해 원본 이미지에서 픽셀 추출
-                masked_pixels = image_np[mask_bool]  # shape: (N, 3)
-
-                # masked_pixels = image_np[mask_2d.astype(bool)]  # shape: (N, 3)
+                masked_pixels = image_np[mask_2d.astype(bool)]  # shape: (N, 3)
                 unique_colors = np.unique(masked_pixels, axis=0)
                 color_count = len(unique_colors)
 
-                # (선택) masked_pixels가 비어 있으면 cvtColor 호출을 건너뛰도록 방어
-                if masked_pixels.size == 0:
-                    hsv_pixels = np.zeros((0, 3), dtype=np.uint8)
-                else:
-                    hsv_pixels = (
-                        cv2.cvtColor(masked_pixels.reshape(-1, 1, 3), cv2.COLOR_RGB2HSV)
-                        .reshape(-1, 3)
-                    )
-
-                # hsv_pixels = cv2.cvtColor(masked_pixels.reshape(-1, 1, 3), cv2.COLOR_RGB2HSV).reshape(-1, 3)
+                hsv_pixels = cv2.cvtColor(masked_pixels.reshape(-1, 1, 3), cv2.COLOR_RGB2HSV).reshape(-1, 3)
                 saturation_std = hsv_pixels[:, 1].std()
 
                 aspect_ratio = width / height if height != 0 else 0
                 y_center = ys.mean() if len(ys) > 0 else 0
 
-                # print(f"=" * 120)
-                # print(f"idx+1: {idx+1}, pixel_count               = {pixel_count}")
-                # print(f"idx+1: {idx+1}, score_val >= score_thresh = {score_val >= score_thresh}, {score_val}, {score_thresh}")
-                # print(f"idx+1: {idx+1}, pixel_count > lower       = {pixel_count > lower}, {pixel_count}, {lower}")
-                # print(f"idx+1: {idx+1}, pixel_count < upper       = {pixel_count < upper}, {pixel_count}, {upper}")
-                # print(f"idx+1: {idx+1}, isPixelOverlapping(L,R)   = {isPixelOverlappingLeft}, {isPixelOverlappingRight}")
-                # print(f"idx+1: {idx+1}, wh_test                   = {wh_test}, width={width}, height={height}")
-                # print(f"idx+1: {idx+1}, x, y, xmax, ymax          = {x_min}, {y_min}, {x_max}, {y_max}")
-                # print(f"idx+1: {idx+1}, 색상수, 채도편차          = {color_count}, {saturation_std:.2f}")
-                # print(f"idx+1: {idx+1}, pt                        = {pt}")
+                print(f"=" * 120)
+                print(f"idx+1: {idx+1}, pixel_count               = {pixel_count}")
+                print(f"idx+1: {idx+1}, score_val >= score_thresh = {score_val >= score_thresh}, {score_val}, {score_thresh}")
+                print(f"idx+1: {idx+1}, pixel_count > lower       = {pixel_count > lower}, {pixel_count}, {lower}")
+                print(f"idx+1: {idx+1}, pixel_count < upper       = {pixel_count < upper}, {pixel_count}, {upper}")
+                print(f"idx+1: {idx+1}, isPixelOverlapping(L,R)   = {isPixelOverlappingLeft}, {isPixelOverlappingRight}")
+                print(f"idx+1: {idx+1}, wh_test                   = {wh_test}, width={width}, height={height}")
+                print(f"idx+1: {idx+1}, x, y, xmax, ymax          = {x_min}, {y_min}, {x_max}, {y_max}")
+                print(f"idx+1: {idx+1}, pt                        = {pt}")
 
-                if score_val >= score_thresh and pixel_count > lower and pixel_count < upper  and isPixelOverlappingUp and isPixelOverlappingRight and ((isPixelOverlappingLeft and wh_test) or isSpecialCase):
+                if score_val >= score_thresh and pixel_count > lower and pixel_count < upper and wh_test and isPixelOverlappingLeft and isPixelOverlappingRight:        
                     
-                    vehicleDetected[idx] = True
-                    
-                    # print(f"-" * 120)
-                    # print(f"idx+1: {idx+1}, [# OOO #] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, Score={score_val:.3f}, width={width}, height={height}")
-                    # print(f"=-" * 60)
-                    # print(f" " * 10)
-                    # print(f" " * 10)
+                    print(f"-" * 120)
+                    print(f"idx+1: {idx+1}, [# OOO #] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, Score={score_val:.3f}, width={width}, height={height}")
+                    print(f"=-" * 60)
+                    print(f" " * 10)
+                    print(f" " * 10)
                     ### print(f"idx+1: {idx}, [O] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, 색상수={color_count}, 채도편차={saturation_std:.2f}, 비율={aspect_ratio:.2f}")
 
                     occupiedCount += 1
@@ -749,17 +642,17 @@ def check_parking_slot_using_image():
                     ## print(f"idx+1: {idx+1}, wh_test                  ={wh_test}, width={width}, height={height}")                    
                     ## print(f"idx+1: {idx+1}, is_overlap_pixels        ={is_overlap_pixels}")
                     ## print(f"idx+1: {idx+1}, pt                       ={pt}")
-                    # print(f"-" * 120)
-                    # print(f"idx+1: {idx+1}, [# XXX #] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, Score={score_val:.3f}, width={width}, height={height}, 색상수={color_count}, 채도편차={saturation_std:.2f}, 비율={aspect_ratio:.2f}")
-                    # print(f"=-" * 60)
-                    # print(f" " * 10)
-                    # print(f" " * 10)
+                    print(f"-" * 120)
+                    print(f"idx+1: {idx+1}, [# XXX #] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, Score={score_val:.3f}, width={width}, height={height}, 색상수={color_count}, 채도편차={saturation_std:.2f}, 비율={aspect_ratio:.2f}")
+                    print(f"=-" * 60)
+                    print(f" " * 10)
+                    print(f" " * 10)
 
 
                     emptyCount += 1
 
                     if pixel_count < 50000:
-                        # output_image = overlay_mask(output_image, mask_2d, color=(255, 144, 30), alpha=0.1)
+                        output_image = overlay_mask(output_image, mask_2d, color=(255, 144, 30), alpha=0.1)
                         output_pil = Image.fromarray(output_image)
                         draw = ImageDraw.Draw(output_pil)  # draw 다시 초기화 필요 (PIL 객체 변경됐기 때문)
 
@@ -814,7 +707,7 @@ def check_parking_slot_using_image():
             #   os.makedirs("output", exist_ok=True)
             Image.fromarray(output_image.astype(np.uint8)).save(save_path)
 
-            print(f"{filename}, saved to {save_path}")
+            print(f"Processed {filename}, saved to {save_path}")
 
 
 
