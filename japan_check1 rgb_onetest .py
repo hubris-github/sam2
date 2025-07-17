@@ -120,6 +120,35 @@ def update_parking_slot_status(supabase, parking_lot_id, status, slot):
         return None
 
 
+def overlap_pixels(rect_points, mask_uint8):
+    """
+    다각형(rect_points)과 이진 마스크(mask_uint8)의 겹치는 픽셀 수를 계산해서 반환합니다.
+
+    Parameters:
+    -----------
+    rect_points : array-like of shape (N, 2)
+        다각형을 정의하는 (x, y) 좌표 리스트 또는 배열.
+    mask_uint8 : numpy.ndarray, dtype=uint8
+        0 또는 1 값으로 이루어진 2D 이진 마스크.
+
+    Returns:
+    --------
+    int
+        다각형 영역과 마스크가 겹치는 픽셀의 개수.
+    """
+    # 1) 좌표를 int32 numpy 배열로 변환
+    pts = np.array(rect_points, dtype=np.int32)
+
+    # 2) mask와 동일 크기의 빈 마스크 생성
+    poly_mask = np.zeros_like(mask_uint8, dtype=np.uint8)
+
+    # 3) 다각형 내부를 1로 채우기
+    cv2.fillPoly(poly_mask, [pts], 1)
+
+    # 4) AND 연산하여 겹치는 부분만 남기고, 픽셀 수 세기
+    intersection = mask_uint8 & poly_mask
+    return int(np.count_nonzero(intersection))
+
 def remove_small_components(mask_2d: np.ndarray,
                             min_size: int = 500,
                             connectivity: np.ndarray = None) -> np.ndarray:
@@ -140,7 +169,7 @@ def remove_small_components(mask_2d: np.ndarray,
 
     # 3) 크기 > 30 인 컴포넌트만 마스크로 생성
     #    counts[0] 은 배경(0) 픽셀 개수이므로 제외
-    large_labels = np.where(counts > 500)[0]
+    large_labels = np.where(counts > min_size)[0]
     large_labels = large_labels[large_labels != 0]  # 0 라벨(배경) 제거
 
     # 4) 최종 필터링: 크기 30 이하 컴포넌트 제거
@@ -170,10 +199,10 @@ predictor = SAM2ImagePredictor(sam2_model)
 file_template = "1_*.png" # 1_20250711_235044sshot
 #folder_path = 'D:/Projects/vision/yolo/images/mp4/japan/'
 folder_path = 'D:/Projects/vision/capture_images/20250710/'
-folder_completed_path = 'D:/Projects/vision/capture_images/20250710/completed5/'
+folder_completed_path = 'D:/Projects/vision/capture_images/20250710/completed8/'
 
 start_index = 0
-end_index = 0 #1443
+end_index = 0# 1443
 index_step = 1
 
 def overlay_mask(base_image, mask, color=(30, 144, 255), alpha=0.6):
@@ -200,22 +229,7 @@ def check_parking_slot_using_image():
 
         # folder_file = folder_path + filename
         filename = folder_path + "1_20250711_012904sshot.png"
-        filename = folder_path + "1_20250711_051606sshot.png"
-        filename = folder_path + "1_20250711_031629sshot.png"
-        filename = folder_path + "1_20250711_031730sshot.png"
-        filename = folder_path + "1_20250711_034637sshot.png"
-        filename = folder_path + "1_20250711_042951sshot.png"
-        filename = folder_path + "1_20250711_091220sshot.png"
-        filename = folder_path + "1_20250711_115113sshot.png"
-        filename = folder_path + "1_20250711_121621sshot.png"
-        filename = folder_path + "1_20250711_131636sshot.png"
-        filename = folder_path + "1_20250711_134946sshot.png"
-        filename = folder_path + "1_20250711_161331sshot.png"
-        filename = folder_path + "1_20250711_173959sshot.png"
-        filename = folder_path + "1_20250711_194728sshot.png"
-        filename = folder_path + "1_20250711_202542sshot.png"
-        filename = folder_path + "1_20250711_210355sshot.png"
-        filename = folder_path + "1_20250711_225929sshot.png"
+        filename = folder_path + "1_20250711_011059sshot.png"
         
         print(f"Processing file: {filename}")
 
@@ -296,7 +310,7 @@ def check_parking_slot_using_image():
             score_thresholds = [0.7,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.4,   0.6,   0.5,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6  ]
             wh_thresholds    = [1,     1,     1,     2,     2,     2,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     2,     2,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1    ]
             vehicleDetected  = [False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False]
-            width_thresholds = [90,    160,   160,   160,   160,   160,   160,   140,   150,   130,   150,   150,   150,   145,   140,   130,   120,   70,    110,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   110,   110,   0    ]
+            width_thresholds = [90,    160,   160,   160,   160,   160,   160,   140,   150,   130,   150,   150,   170,   145,   140,   130,   120,   70,    110,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   110,   110,   0    ]
             height_thresholds= [160,   160,   160,   160,   160,   160,   160,   160,   220,   220,   220,   220,   170,   150,   150,   150,   150,   100,   110,   130,   130,   140,   140,   140,   140,   150,   150,   150,   150,   140,   140,   140,   130,   130,   120,   120,   120,   0    ]
             wh_direction     = [-1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    0,     0,     0,     1,     1,     1,     1,     1,     1,     1,     -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    0,     0,     0,     1,     1,     1,     1,     1,     1,     1,     1,     1    ]
             slots = [f"A{i}" for i in range(1, 13)] + [f"B{i}" for i in range(1, 13)]
@@ -403,6 +417,7 @@ def check_parking_slot_using_image():
                 22: [400, 415],
                 27: [770, 425],
                 29: [936, 426],
+                31: [1069, 431],
             }
 
             overlayed_image = np.array(image_pil.convert("RGB"))
@@ -473,7 +488,7 @@ def check_parking_slot_using_image():
 
                     # 3) 크기 > 30 인 컴포넌트만 마스크로 생성
                     #    counts[0] 은 배경(0) 픽셀 개수이므로 제외
-                    large_labels = np.where(counts > 0)[0]
+                    large_labels = np.where(counts > 500)[0]
                     large_labels = large_labels[large_labels != 0]  # 0 라벨(배경) 제거
 
                     # 4) 최종 필터링: 크기 30 이하 컴포넌트 제거
@@ -515,6 +530,7 @@ def check_parking_slot_using_image():
 
                     if idx in range(1, 10) or idx in range(18, 26):  # 1~9, 18~25 영역의 자동차가 오른쪽 면을 침범하면 자동차가 아님(침범하면 보통 주차면임)
                         # 1) rect_right_idx: #2 영역의 좌표 (list of (x, y))
+                        #overlap_pixels = overlap_pixels(rectangles_as_tuples[idx+1], mask_2d)
                         rect_right_idx = np.array(rectangles_as_tuples[idx+1], dtype=np.int32)
                         
                         # 2) 같은 크기의 빈 마스크 생성
@@ -553,7 +569,7 @@ def check_parking_slot_using_image():
 
                             print(f"idx+1: {idx+1}, (L1) overlap_pixels = {overlap_pixels}")
 
-                            if overlap_pixels == 0:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
+                            if overlap_pixels < 50:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
                                 # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
                                 isPixelOverlappingLeft = False
 
@@ -578,7 +594,7 @@ def check_parking_slot_using_image():
                             isPixelOverlappingLeft = False
 
                             # 왼쪽에 있는 차량이 색상이 같은 경우 왼쪽으로 침범하는 경우가 있음.
-                            if idx == 15 and vehicleDetected[idx-1]:
+                            if idx in {13, 15} and vehicleDetected[idx-1]:
                                 # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
                                 isSpecialCase = True    
 
@@ -612,6 +628,7 @@ def check_parking_slot_using_image():
                                 if overlap_pixels < 300:  # 오른쪽 주차면을 300픽셀 이상 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
                                     # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
                                     isPixelOverlappingRight = False
+                                    print(f"idx+1: {idx+1}, (IDX12 (R) overlap_pixels = {overlap_pixels}")
 
                             elif idx == 15:
                                 
@@ -627,7 +644,7 @@ def check_parking_slot_using_image():
                                 intersection = mask_uint8 & poly_mask
                                 overlap_pixels = np.count_nonzero(intersection)     # 겹치는 픽셀 수
 
-                                print(f"idx+1: {idx+1}, overlap_pixels = {overlap_pixels}")
+                                print(f"idx+1: {idx+1}, (IDX15) (R) overlap_pixels = {overlap_pixels}")
 
                                 if overlap_pixels == 0:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
                                     # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
@@ -637,7 +654,7 @@ def check_parking_slot_using_image():
                             # 한 주차면에서 차량 검출 시 3개의 주차면을 차지하면 오류
                             if idx == 16:  # idx 16에서 17의 오른쪽 영역(18)을 침범하면 안 됨, rectangles_as_tuples2[2]을 사용
 
-                                rect_right_idx = np.array(rectangles_as_tuples2[0], dtype=np.int32) 
+                                rect_right_idx = np.array(rectangles_as_tuples2[1], dtype=np.int32) 
 
                                 # 2) 같은 크기의 빈 마스크 생성
                                 poly_mask = np.zeros_like(mask_2d, dtype=np.uint8)
@@ -649,9 +666,14 @@ def check_parking_slot_using_image():
                                 intersection = mask_uint8 & poly_mask
                                 overlap_pixels = np.count_nonzero(intersection)     # 겹치는 픽셀 수
 
-                                if overlap_pixels > 0:  # 2칸 건너 주차면을 침범하면 안 됨
+                                print(f"idx+1: {idx+1}, (IDX16) (R) overlap_pixels = {overlap_pixels}")
+
+                                if overlap_pixels > 500:  # 2칸 건너 주차면을 침범하면 안 됨
                                     # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
                                     isPixelOverlappingRight = False
+
+
+
 
                     # 자동차가 검출되었으면 윗쪽 영역을 침범해야 함                
                     if idx in range(18, 37):        # 18~36 자동차가 있으면 주차선 윗쪽으로 자동차가 침범해야 함
