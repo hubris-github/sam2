@@ -237,6 +237,10 @@ def check_parking_slot_using_image():
         # folder_file = folder_path + filename
         filename = folder_path + "1_20250711_012904sshot.png"
         filename = folder_path + "1_20250711_011059sshot.png"
+        filename = folder_path + "1_20250711_011259sshot.png"
+        filename = folder_path + "1_20250711_172055sshot.png"
+        filename = folder_path + "1_20250711_202341sshot.png"
+        filename = folder_path + "1_20250710_234400sshot.png"
         
         print(f"Processing file: {filename}")
 
@@ -314,11 +318,11 @@ def check_parking_slot_using_image():
             #                   A1     A2     A3     A4     A5     A6     A7     A8     A9     B1     B2     B3     B4     B5     B6     B7     B8     B9     B10    B11    B12    C1     C2     C3     C4     C5     C6     C7     C8     C9     C10    C11    C12    D1     D2     D3     D4     D5
             lower_thresholds = [2000,  5000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3500,  3500,  3500,  3500,  3000,  2500,  1500,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  1500 ]
             upper_thresholds = [10000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 30000, 30000, 30000, 30000, 30000]
-            score_thresholds = [0.7,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.4,   0.6,   0.5,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6  ]
+            score_thresholds = [0.7,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.3,   0.6,   0.5,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6  ]
             wh_thresholds    = [1,     1,     1,     2,     2,     2,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     2,     2,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1    ]
             vehicleDetected  = [False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False]
             width_thresholds = [90,    160,   160,   160,   160,   160,   160,   140,   150,   130,   150,   150,   170,   145,   140,   130,   120,   70,    110,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   110,   110,   0    ]
-            height_thresholds= [160,   160,   160,   160,   160,   160,   160,   160,   220,   220,   220,   220,   170,   150,   150,   150,   150,   100,   110,   130,   130,   140,   140,   140,   140,   150,   150,   150,   150,   140,   140,   140,   130,   130,   120,   120,   120,   0    ]
+            height_thresholds= [160,   160,   160,   160,   160,   160,   160,   160,   220,   220,   220,   220,   180,   150,   150,   150,   150,   100,   110,   130,   130,   140,   140,   140,   140,   150,   150,   150,   150,   140,   140,   140,   130,   130,   120,   120,   120,   0    ]
             wh_direction     = [-1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    0,     0,     0,     1,     1,     1,     1,     1,     1,     1,     -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    0,     0,     0,     1,     1,     1,     1,     1,     1,     1,     1,     1    ]
             slots = [f"A{i}" for i in range(1, 13)] + [f"B{i}" for i in range(1, 13)]
             rectangles_as_tuples = [
@@ -535,6 +539,7 @@ def check_parking_slot_using_image():
                 if idx > 0:     # 0번째는 왼쪽에 붙어 있으므로 제외, 1번째 인덱스부터 시작
                     mask_uint8 = mask_2d.astype(np.uint8)
 
+                    # 오른쪽 주차면을 침범하는지 확인
                     if idx in range(1, 10) or idx in range(18, 26):  # 1~9, 18~25 영역의 자동차가 오른쪽 면을 침범하면 자동차가 아님(침범하면 보통 주차면임)
                         right_overlap_pixels = get_overlap_pixels(rectangles_as_tuples[idx+1], mask_2d)
                         print(f"idx+1: {idx+1}, (R1) right_overlap_pixels = {right_overlap_pixels}")
@@ -554,13 +559,20 @@ def check_parking_slot_using_image():
                             if left_overlap_pixels < 50:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
                                 isPixelOverlappingLeft = False
 
-
+                    # 왼쪽 주차면을 침범하는지 확인
                     elif idx in range(10, 18) or idx in range(28, 37):   # 10~17, 28~36 영역의 자동차가 왼쪽 면에 붙으면 안 됨
                         left_overlap_pixels = get_overlap_pixels(rectangles_as_tuples[idx-1], mask_2d)
                         print(f"idx+1: {idx+1}, (L2) left_overlap_pixels = {left_overlap_pixels}")
 
                         if left_overlap_pixels > 0:  # 왼쪽 주차면을 침범하면 안 될 경우, 침범하면 오류
                             isPixelOverlappingLeft = False
+
+                            # 왼쪽으로 침범하면 왼쪽도 주차면이므로, 왼쪽 주차면의 상태를 주차면으로 갱신함.
+                            # 주차대수를 1 감소시킴
+                            if idx == 17:
+                                if( vehicleDetected[idx-1] == True ):   # 왼쪽에 차량이 주차 되어 있다면
+                                    vehicleDetected[idx-1] = False      # 주차한 것이 아님으로 갱신
+                                    occupiedCount -= 1                  # 주차된 차량 수를 1 감소시킴
 
                             # 왼쪽에 있는 차량이 색상이 같은 경우 왼쪽으로 침범하는 경우가 있음.
                             if idx in {13, 15} and vehicleDetected[idx-1]:
@@ -597,6 +609,23 @@ def check_parking_slot_using_image():
                                 if right_overlap_pixels > 500:  # 2칸 건너 주차면을 침범하면 안 됨
                                     isPixelOverlappingRight = False
 
+                                overlap_16_pixels = get_overlap_pixels(rectangles_as_tuples[idx], mask_2d)
+                                overlap_17_pixels = get_overlap_pixels(rectangles_as_tuples[idx+1], mask_2d)
+
+                                print(f"idx+1: {idx+1}, (IDX16) (R) overlap_16_pixels = {overlap_16_pixels}")
+                                print(f"idx+2: {idx+2}, (IDX16) (R) overlap_17_pixels = {overlap_17_pixels}")
+                
+                            # if idx == 18:
+                            #     right_overlap_pixels = get_overlap_pixels(rectangles_as_tuples2[1], mask_2d)
+                            #     print(f"idx+1: {idx+1}, (IDX16) (R) right_overlap_pixels = {right_overlap_pixels}")
+                            #     if right_overlap_pixels > 500:  # 2칸 건너 주차면을 침범하면 안 됨
+                            #         isPixelOverlappingRight = False
+
+                            #     overlap_16_pixels = get_overlap_pixels(rectangles_as_tuples[idx], mask_2d)
+                            #     overlap_17_pixels = get_overlap_pixels(rectangles_as_tuples[idx+1], mask_2d)
+
+                            #     print(f"idx+1: {idx+1}, (IDX16) (R) overlap_16_pixels = {overlap_16_pixels}")
+                            #     print(f"idx+2: {idx+2}, (IDX16) (R) overlap_17_pixels = {overlap_17_pixels}")
 
                     # 자동차가 검출되었으면 윗쪽 영역을 침범해야 함                
                     if idx in range(18, 37):        # 18~36 자동차가 있으면 주차선 윗쪽으로 자동차가 침범해야 함
