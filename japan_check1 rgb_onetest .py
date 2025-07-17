@@ -120,7 +120,7 @@ def update_parking_slot_status(supabase, parking_lot_id, status, slot):
         return None
 
 
-def overlap_pixels(rect_points, mask_uint8):
+def get_overlap_pixels(rect_points, mask_2d: np.ndarray) -> int:
     """
     다각형(rect_points)과 이진 마스크(mask_uint8)의 겹치는 픽셀 수를 계산해서 반환합니다.
 
@@ -136,6 +136,13 @@ def overlap_pixels(rect_points, mask_uint8):
     int
         다각형 영역과 마스크가 겹치는 픽셀의 개수.
     """
+
+    if mask_2d.dtype != np.uint8:
+        # mask_2d가 float32라면 0보다 큰 픽셀을 1로, 나머지를 0으로
+        mask_uint8 = (mask_2d > 0).astype(np.uint8)
+    else:
+        mask_uint8 = mask_2d
+
     # 1) 좌표를 int32 numpy 배열로 변환
     pts = np.array(rect_points, dtype=np.int32)
 
@@ -146,7 +153,7 @@ def overlap_pixels(rect_points, mask_uint8):
     cv2.fillPoly(poly_mask, [pts], 1)
 
     # 4) AND 연산하여 겹치는 부분만 남기고, 픽셀 수 세기
-    intersection = mask_uint8 & poly_mask
+    intersection = mask_uint8  & poly_mask
     return int(np.count_nonzero(intersection))
 
 def remove_small_components(mask_2d: np.ndarray,
@@ -529,170 +536,74 @@ def check_parking_slot_using_image():
                     mask_uint8 = mask_2d.astype(np.uint8)
 
                     if idx in range(1, 10) or idx in range(18, 26):  # 1~9, 18~25 영역의 자동차가 오른쪽 면을 침범하면 자동차가 아님(침범하면 보통 주차면임)
-                        # 1) rect_right_idx: #2 영역의 좌표 (list of (x, y))
-                        #overlap_pixels = overlap_pixels(rectangles_as_tuples[idx+1], mask_2d)
-                        rect_right_idx = np.array(rectangles_as_tuples[idx+1], dtype=np.int32)
-                        
-                        # 2) 같은 크기의 빈 마스크 생성
-                        poly_mask = np.zeros_like(mask_2d, dtype=np.uint8)
-
-                        # 3) 사각형(다각형) 내부를 1로 채우기
-                        cv2.fillPoly(poly_mask, [rect_right_idx], 1)
-
-                        # 4) AND 연산하여 겹치는 픽셀 수 확인
-                        intersection = mask_uint8 & poly_mask
-                        overlap_pixels = np.count_nonzero(intersection)     # 겹치는 픽셀 수
-
-                        print(f"idx+1: {idx+1}, (R1) overlap_pixels = {overlap_pixels}")
-
-                        if overlap_pixels > 0:  # 오른쪽 주차면을 침범하면 안 될 경우, 침범하면 오류
-                            # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
+                        right_overlap_pixels = get_overlap_pixels(rectangles_as_tuples[idx+1], mask_2d)
+                        print(f"idx+1: {idx+1}, (R1) right_overlap_pixels = {right_overlap_pixels}")
+                        if right_overlap_pixels > 0:  # 오른쪽 주차면을 침범하면 안 될 경우, 침범하면 오류
                             isPixelOverlappingRight = False
 
                         # 주차면에 자동차가 있다면, 왼쪽으로 침범해야 함
                         if idx in range(1, 7) or idx in range(18, 24): #  # 1 ~ 6 영역의 자동차가 있으면 왼쪽으로 침범해야 함
                             # idx 18은 윗쪽의 맨 왼쪽 주차면이므로, rectangles_as_tuples2[2]을 사용
                             if idx == 18:
-                                rect_left_idx = np.array(rectangles_as_tuples2[2], dtype=np.int32)
+                                left_overlap_pixels = get_overlap_pixels(rectangles_as_tuples2[2], mask_2d)
                             else:
-                                rect_left_idx = np.array(rectangles_as_tuples[idx-1], dtype=np.int32)
+                                left_overlap_pixels = get_overlap_pixels(rectangles_as_tuples[idx-1], mask_2d)
 
-                            # 2) 같은 크기의 빈 마스크 생성
-                            poly_mask = np.zeros_like(mask_2d, dtype=np.uint8)
+                            print(f"idx+1: {idx+1}, (L1) left_overlap_pixels = {left_overlap_pixels}")
 
-                            # 3) 사각형(다각형) 내부를 1로 채우기
-                            cv2.fillPoly(poly_mask, [rect_left_idx], 1)
-
-                            # 4) AND 연산하여 겹치는 픽셀 수 확인
-                            intersection = mask_uint8 & poly_mask
-                            overlap_pixels = np.count_nonzero(intersection)     # 겹치는 픽셀 수
-
-                            print(f"idx+1: {idx+1}, (L1) overlap_pixels = {overlap_pixels}")
-
-                            if overlap_pixels < 50:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
-                                # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
+                            if left_overlap_pixels < 50:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
                                 isPixelOverlappingLeft = False
 
 
                     elif idx in range(10, 18) or idx in range(28, 37):   # 10~17, 28~36 영역의 자동차가 왼쪽 면에 붙으면 안 됨
-                        rect_left_idx = np.array(rectangles_as_tuples[idx-1], dtype=np.int32)
+                        left_overlap_pixels = get_overlap_pixels(rectangles_as_tuples[idx-1], mask_2d)
+                        print(f"idx+1: {idx+1}, (L2) left_overlap_pixels = {left_overlap_pixels}")
 
-                        # 1) 같은 크기의 빈 마스크 생성
-                        poly_mask = np.zeros_like(mask_2d, dtype=np.uint8)
-
-                        # 2) 사각형(다각형) 내부를 1로 채우기
-                        cv2.fillPoly(poly_mask, [rect_left_idx], 1)
-
-                        # 3) AND 연산하여 겹치는 픽셀 수 확인
-                        intersection = mask_uint8 & poly_mask
-                        overlap_pixels = np.count_nonzero(intersection)
-
-                        print(f"idx+1: {idx+1}, (L2) overlap_pixels = {overlap_pixels}")
-
-                        if overlap_pixels > 0:  # 왼쪽 주차면을 침범하면 안 될 경우, 침범하면 오류
-                            # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
+                        if left_overlap_pixels > 0:  # 왼쪽 주차면을 침범하면 안 될 경우, 침범하면 오류
                             isPixelOverlappingLeft = False
 
                             # 왼쪽에 있는 차량이 색상이 같은 경우 왼쪽으로 침범하는 경우가 있음.
                             if idx in {13, 15} and vehicleDetected[idx-1]:
-                                # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
                                 isSpecialCase = True    
-
 
                         # 주차면에 자동차가 있다면, 오른쪽으로 침범해야 함
                         if idx in range(10, 18) or idx in range(31, 37): #  # 10 ~ 17, 31 ~ 37 영역의 자동차가 있으면 오른쪽으로 침범해야 함
-                            # 1) rect_right_idx: #2 영역의 좌표 (list of (x, y))
-                            
                             if idx == 17:  # idx 17은 윗쪽의 맨 오른쪽 주차면이므로, rectangles_as_tuples2[1]을 사용
-                                rect_right_idx = np.array(rectangles_as_tuples2[1], dtype=np.int32) 
+                                right_overlap_pixels = get_overlap_pixels(rectangles_as_tuples2[1], mask_2d)
                             else:
-                                rect_right_idx = np.array(rectangles_as_tuples[idx+1], dtype=np.int32)
+                                right_overlap_pixels = get_overlap_pixels(rectangles_as_tuples[idx+1], mask_2d)
 
-                            # 2) 같은 크기의 빈 마스크 생성
-                            poly_mask = np.zeros_like(mask_2d, dtype=np.uint8)
+                            print(f"idx+1: {idx+1}, (R2) right_overlap_pixels = {right_overlap_pixels}")
 
-                            # 3) 사각형(다각형) 내부를 1로 채우기
-                            cv2.fillPoly(poly_mask, [rect_right_idx], 1)
-
-                            # 4) AND 연산하여 겹치는 픽셀 수 확인
-                            intersection = mask_uint8 & poly_mask
-                            overlap_pixels = np.count_nonzero(intersection)     # 겹치는 픽셀 수
-
-                            print(f"idx+1: {idx+1}, (R2) overlap_pixels = {overlap_pixels}")
-
-                            if overlap_pixels == 0:  # 오른쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
-                                # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
+                            if right_overlap_pixels == 0:  # 오른쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
                                 isPixelOverlappingRight = False
-                            elif idx == 12:
-                                
-                                if overlap_pixels < 300:  # 오른쪽 주차면을 300픽셀 이상 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
-                                    # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
+                            
+                            elif idx == 12:                                
+                                if right_overlap_pixels < 300:  # 오른쪽 주차면을 300픽셀 이상 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
                                     isPixelOverlappingRight = False
-                                    print(f"idx+1: {idx+1}, (IDX12 (R) overlap_pixels = {overlap_pixels}")
+                                    print(f"idx+1: {idx+1}, (IDX12 (R) right_overlap_pixels = {right_overlap_pixels}")
 
                             elif idx == 15:
-                                
-                                rect_right_idx = np.array(rectangles_as_tuples2[0], dtype=np.int32) 
+                                right_overlap_pixels = get_overlap_pixels(rectangles_as_tuples2[0], mask_2d)
+                                print(f"idx+1: {idx+1}, (IDX15) (R) right_overlap_pixels = {right_overlap_pixels}")
 
-                                # 2) 같은 크기의 빈 마스크 생성
-                                poly_mask = np.zeros_like(mask_2d, dtype=np.uint8)
-
-                                # 3) 사각형(다각형) 내부를 1로 채우기
-                                cv2.fillPoly(poly_mask, [rect_right_idx], 1)
-
-                                # 4) AND 연산하여 겹치는 픽셀 수 확인
-                                intersection = mask_uint8 & poly_mask
-                                overlap_pixels = np.count_nonzero(intersection)     # 겹치는 픽셀 수
-
-                                print(f"idx+1: {idx+1}, (IDX15) (R) overlap_pixels = {overlap_pixels}")
-
-                                if overlap_pixels == 0:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
-                                    # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
+                                if right_overlap_pixels == 0:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
                                     isPixelOverlappingRight = False
-                                
                                 
                             # 한 주차면에서 차량 검출 시 3개의 주차면을 차지하면 오류
                             if idx == 16:  # idx 16에서 17의 오른쪽 영역(18)을 침범하면 안 됨, rectangles_as_tuples2[2]을 사용
-
-                                rect_right_idx = np.array(rectangles_as_tuples2[1], dtype=np.int32) 
-
-                                # 2) 같은 크기의 빈 마스크 생성
-                                poly_mask = np.zeros_like(mask_2d, dtype=np.uint8)
-
-                                # 3) 사각형(다각형) 내부를 1로 채우기
-                                cv2.fillPoly(poly_mask, [rect_right_idx], 1)
-
-                                # 4) AND 연산하여 겹치는 픽셀 수 확인
-                                intersection = mask_uint8 & poly_mask
-                                overlap_pixels = np.count_nonzero(intersection)     # 겹치는 픽셀 수
-
-                                print(f"idx+1: {idx+1}, (IDX16) (R) overlap_pixels = {overlap_pixels}")
-
-                                if overlap_pixels > 500:  # 2칸 건너 주차면을 침범하면 안 됨
-                                    # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
+                                right_overlap_pixels = get_overlap_pixels(rectangles_as_tuples2[1], mask_2d)
+                                print(f"idx+1: {idx+1}, (IDX16) (R) right_overlap_pixels = {right_overlap_pixels}")
+                                if right_overlap_pixels > 500:  # 2칸 건너 주차면을 침범하면 안 됨
                                     isPixelOverlappingRight = False
-
-
 
 
                     # 자동차가 검출되었으면 윗쪽 영역을 침범해야 함                
                     if idx in range(18, 37):        # 18~36 자동차가 있으면 주차선 윗쪽으로 자동차가 침범해야 함
-                        rect_up_idx = np.array(upanddown_as_tuples[idx], dtype=np.int32)
+                        up_overlap_pixels = get_overlap_pixels(upanddown_as_tuples[idx], mask_2d)
+                        print(f"idx+1: {idx+1}, (U) up_overlap_pixels = {up_overlap_pixels}")
 
-                        # 2) 같은 크기의 빈 마스크 생성
-                        poly_mask = np.zeros_like(mask_2d, dtype=np.uint8)
-
-                        # 3) 사각형(다각형) 내부를 1로 채우기
-                        cv2.fillPoly(poly_mask, [rect_up_idx], 1)
-
-                        # 4) AND 연산하여 겹치는 픽셀 수 확인
-                        intersection = mask_uint8 & poly_mask
-                        overlap_pixels = np.count_nonzero(intersection)     # 겹치는 픽셀 수
-
-                        print(f"idx+1: {idx+1}, (U) overlap_pixels = {overlap_pixels}")
-
-                        if overlap_pixels == 0:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
-                            # print(f"idx: {idx+1}, ⚠️ 겹침 발생: {overlap_pixels} 픽셀")
+                        if up_overlap_pixels == 0:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
                             isPixelOverlappingUp = False
 
                 pixel_count = np.count_nonzero(mask_2d)
