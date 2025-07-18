@@ -206,7 +206,7 @@ predictor = SAM2ImagePredictor(sam2_model)
 file_template = "1_*.png" # 1_20250711_235044sshot
 #folder_path = 'D:/Projects/vision/yolo/images/mp4/japan/'
 folder_path = 'D:/Projects/vision/capture_images/20250710/'
-folder_completed_path = 'D:/Projects/vision/capture_images/20250710/completed8/'
+folder_completed_path = 'D:/Projects/vision/capture_images/20250710/completed10/'
 
 start_index = 0
 end_index = 1443
@@ -559,13 +559,6 @@ def check_parking_slot_using_image():
                         if left_overlap_pixels > 0:  # 왼쪽 주차면을 침범하면 안 될 경우, 침범하면 오류
                             isPixelOverlappingLeft = False
 
-                            # 왼쪽으로 침범하면 왼쪽도 주차면이므로, 왼쪽 주차면의 상태를 주차면으로 갱신함.
-                            # 주차대수를 1 감소시킴
-                            if idx == 17:
-                                if( vehicleDetected[idx-1] == True ):   # 왼쪽에 차량이 주차 되어 있다면
-                                    vehicleDetected[idx-1] = False      # 주차한 것이 아님으로 갱신
-                                    occupiedCount -= 1                  # 주차된 차량 수를 1 감소시킴
-
                             # 왼쪽에 있는 차량이 색상이 같은 경우 왼쪽으로 침범하는 경우가 있음.
                             if idx in {13, 15} and vehicleDetected[idx-1]:
                                 isSpecialCase = True    
@@ -601,12 +594,17 @@ def check_parking_slot_using_image():
                                 if right_overlap_pixels > 500:  # 2칸 건너 주차면을 침범하면 안 됨
                                     isPixelOverlappingRight = False
 
-                                overlap_16_pixels = get_overlap_pixels(rectangles_as_tuples[idx], mask_2d)
-                                overlap_17_pixels = get_overlap_pixels(rectangles_as_tuples[idx+1], mask_2d)
-
-                                # print(f"idx+1: {idx+1}, (IDX16) (R) overlap_16_pixels = {overlap_16_pixels}")
-                                # print(f"idx+2: {idx+2}, (IDX16) (R) overlap_17_pixels = {overlap_17_pixels}")
+                                # overlap_16_pixels = get_overlap_pixels(rectangles_as_tuples[idx], mask_2d)
+                                # overlap_17_pixels = get_overlap_pixels(rectangles_as_tuples[idx+1], mask_2d)
                 
+                                ectangles_as_17 = [
+                                    [(1360, 601), (1405, 664), (1407, 663), (1362, 599)], 
+                                ]
+                                small_overlap_pixels = get_overlap_pixels(ectangles_as_17[0], mask_2d)
+                                if small_overlap_pixels > 0:
+                                    isPixelOverlappingRight = False
+                                    # print(f"idx+1: {idx+1}, (IDX16) (R) small_overlap_pixels = {small_overlap_pixels}")
+                                     
                             # if idx == 18:
                             #     right_overlap_pixels = get_overlap_pixels(rectangles_as_tuples2[1], mask_2d)
                             #     print(f"idx+1: {idx+1}, (IDX16) (R) right_overlap_pixels = {right_overlap_pixels}")
