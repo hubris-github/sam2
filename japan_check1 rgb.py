@@ -206,7 +206,7 @@ predictor = SAM2ImagePredictor(sam2_model)
 file_template = "1_*.png" # 1_20250711_235044sshot
 #folder_path = 'D:/Projects/vision/yolo/images/mp4/japan/'
 folder_path = 'D:/Projects/vision/capture_images/20250710/'
-folder_completed_path = 'D:/Projects/vision/capture_images/20250710/completed10/'
+folder_completed_path = 'D:/Projects/vision/capture_images/20250710/completed11/'
 
 start_index = 0
 end_index = 1443
@@ -601,7 +601,7 @@ def check_parking_slot_using_image():
                                     [(1360, 601), (1405, 664), (1407, 663), (1362, 599)], 
                                 ]
                                 small_overlap_pixels = get_overlap_pixels(ectangles_as_17[0], mask_2d)
-                                if small_overlap_pixels > 0:
+                                if small_overlap_pixels > 100:
                                     isPixelOverlappingRight = False
                                     # print(f"idx+1: {idx+1}, (IDX16) (R) small_overlap_pixels = {small_overlap_pixels}")
                                      

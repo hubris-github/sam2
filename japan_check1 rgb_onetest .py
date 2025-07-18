@@ -237,6 +237,7 @@ def check_parking_slot_using_image():
         # folder_file = folder_path + filename
         filename = folder_path + "1_20250711_012904sshot.png"
         filename = folder_path + "1_20250711_113307sshot.png"
+        filename = folder_path + "1_20250711_011259sshot.png"
         
         print(f"Processing file: {filename}")
 
@@ -607,7 +608,7 @@ def check_parking_slot_using_image():
                                     [(1360, 601), (1405, 664), (1407, 663), (1362, 599)], 
                                 ]
                                 small_overlap_pixels = get_overlap_pixels(ectangles_as_17[0], mask_2d)
-                                if small_overlap_pixels > 0:
+                                if small_overlap_pixels > 100:
                                     isPixelOverlappingRight = False
                                     print(f"idx+1: {idx+1}, (IDX16) (R) small_overlap_pixels = {small_overlap_pixels}")
 
