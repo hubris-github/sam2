@@ -276,7 +276,7 @@ index_step = 1
 #     base_image[mask] = (1 - alpha) * base_image[mask] + alpha * overlay[mask]
 #     return base_image
 
-def overlay_mask(base_image, mask, color=(255, 255, 0), alpha=0.6):
+def overlay_mask(base_image, mask, color=(30, 144, 255), alpha=0.6):
     """
     base_image: (H, W, 3)  np.ndarray (BGR)
     mask:       (H, W)     np.ndarray, dtype=bool or 0/1
@@ -321,8 +321,8 @@ def check_parking_slot_using_image():
 
         if os.path.exists(filename):
             image_pil = Image.open(filename)
-            # image_np = np.array(image_pil.convert("RGB"))
-            image_np = np.array(image_pil.convert("L"))
+            image_np = np.array(image_pil.convert("RGB"))
+            # image_np = np.array(image_pil.convert("L"))
 
             output_image = image_np.copy()  # 마스크 누적할 이미지
 
@@ -332,16 +332,18 @@ def check_parking_slot_using_image():
             try:
                     font = ImageFont.truetype("arial.ttf", 15)  # 시스템 폰트가 있으면 사용
                     font2 = ImageFont.truetype("arial.ttf", 100)
+                    font_edge = ImageFont.truetype("arial.ttf", 20)
             except:
                     font = ImageFont.load_default()
                     font2 = ImageFont.load_default()
+                    font_edge = ImageFont.truetype("arial.ttf", 20)
 
             # print("cwd:", os.getcwd(), "latest file:", filename)
             # print("image shape:", image.shape)
 
-            # predictor.set_image(image_np)
-            gray_rgb = np.stack([image_np, image_np, image_np], axis=-1).astype(np.uint8)
-            predictor.set_image(gray_rgb)
+            predictor.set_image(image_np)
+            # gray_rgb = np.stack([image_np, image_np, image_np], axis=-1).astype(np.uint8)
+            # predictor.set_image(gray_rgb)
 
             input_points = np.array([
                 [14, 556],  #1 (idx 0)

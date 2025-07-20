@@ -337,7 +337,7 @@ def check_parking_slot_using_image():
             try:
                     font = ImageFont.truetype("arial.ttf", 15)  # 시스템 폰트가 있으면 사용
                     font2 = ImageFont.truetype("arial.ttf", 100)
-                    font_edge = ImageFont.truetype("arial.ttf", 20)  # 시스템 폰트가 있으면 사용
+                    font_edge = ImageFont.truetype("arial.ttf", 20)
             except:
                     font = ImageFont.load_default()
                     font2 = ImageFont.load_default()
