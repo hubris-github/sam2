@@ -52,6 +52,55 @@ elif device.type == "mps":
 
 np.random.seed(3)
 
+def count_edges_in_roi(
+    image_np: np.ndarray,
+    mask_2d: np.ndarray,
+    x_min: int,
+    y_min: int,
+    width: int,
+    height: int,
+    low_thresh: int = 50,
+    high_thresh: int = 150,
+    blur_ksize: tuple = (5, 5)
+) -> int:
+    """
+    mask_2d로 정의된 영역 안에서 Canny 에지를 검출하고 에지 픽셀 수를 반환합니다.
+
+    Args:
+        image_np: (H, W, 3) RGB 이미지
+        mask_2d:  (H, W) bool 또는 0/1 바이너리 마스크
+        x_min:    ROI 왼쪽 상단 X 좌표
+        y_min:    ROI 왼쪽 상단 Y 좌표
+        width:    ROI 너비
+        height:   ROI 높이
+        low_thresh:  Canny 하한값
+        high_thresh: Canny 상한값
+        blur_ksize:  GaussianBlur 커널 크기
+
+    Returns:
+        edge_count: ROI 내에서 검출된 에지 픽셀(255) 개수
+    """
+    # 1) 그레이스케일 변환
+    gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
+
+    # 2) ROI & 마스크 영역 잘라내기
+    roi_gray = gray[y_min:y_min+height, x_min:x_min+width]
+    mask_roi = (mask_2d[y_min:y_min+height, x_min:x_min+width]
+                .astype(np.uint8) * 255)
+
+    # 3) 마스크 적용
+    roi_masked = cv2.bitwise_and(roi_gray, roi_gray, mask=mask_roi)
+
+    # 4) 노이즈 제거
+    roi_blur = cv2.GaussianBlur(roi_masked, blur_ksize, 0)
+
+    # 5) Canny 에지 검출
+    edges_roi = cv2.Canny(roi_blur, low_thresh, high_thresh)
+
+    # 6) 에지 픽셀 수 세기
+    edge_count = int(np.count_nonzero(edges_roi))
+    return edge_count
+
 def show_mask(mask, ax, random_color=False, borders = True):
     
     if random_color:
@@ -206,7 +255,7 @@ predictor = SAM2ImagePredictor(sam2_model)
 file_template = "1_*.png" # 1_20250711_235044sshot
 #folder_path = 'D:/Projects/vision/yolo/images/mp4/japan/'
 folder_path = 'D:/Projects/vision/capture_images/20250713/'
-folder_completed_path = 'D:/Projects/vision/capture_images/20250713/completed1/'
+folder_completed_path = 'D:/Projects/vision/capture_images/20250713/completed3/'
 
 start_index = 0
 end_index = 0# 1443
@@ -219,14 +268,43 @@ def overlay_mask(base_image, mask, color=(30, 144, 255), alpha=0.6):
     color: RGB tuple (0~255)
     alpha: blending strength (0~1)
     """
-    overlay = np.zeros_like(base_image, dtype=np.uint8)
+    # overlay = np.zeros_like(base_image, dtype=np.uint8)
+    overlay = np.zeros((base_image.shape[0], base_image.shape[1], 3), dtype=np.uint8)
+
     for i in range(3):  # RGB 채널에 색상 적용
         overlay[:, :, i] = color[i]
 
     mask = mask.astype(bool)
     base_image[mask] = (1 - alpha) * base_image[mask] + alpha * overlay[mask]
     return base_image
+    
+# def overlay_mask(base_image, mask, color=(30, 144, 255), alpha=0.6):
+#     """
+#     base_image: (H, W, 3)  np.ndarray (BGR)
+#     mask:       (H, W)     np.ndarray, dtype=bool or 0/1
+#     color:      RGB tuple (0~255)
+#     alpha:      blending strength (0~1)
+#     """
+#     # ① base_image를 3채널 BGR로 맞추기 (혹시 그레이이면 복사+변환)
+#     if base_image.ndim == 2:
+#         base_image = cv2.cvtColor(base_image, cv2.COLOR_GRAY2BGR)
+#     else:
+#         base_image = base_image.copy()
 
+#     h, w = base_image.shape[:2]
+#     overlay = np.zeros((h, w, 3), dtype=np.uint8)
+#     for i in range(3):
+#         overlay[:, :, i] = color[i]
+
+#     mask = mask.astype(bool)
+#     # ② Boolean mask 영역만 blending
+#     base_image[mask] = (
+#         (1 - alpha) * base_image[mask] +
+#          alpha      * overlay[mask]
+#     ).astype(np.uint8)
+
+#     return base_image
+    
 def write_log(message: str) -> None:
     log_filename = folder_completed_path + "processing.log"
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -242,15 +320,14 @@ def check_parking_slot_using_image():
     for filename in files[start_index : end_index + 1 : index_step]:  
 
         # folder_file = folder_path + filename
-        filename = folder_path + "1_20250712_101925sshot.png"
-        filename = folder_path + "1_20250713_021717sshot.png"
-        filename = folder_path + "1_20250713_021717sshot.png"
+        filename = folder_path + "1_20250713_020915sshot.png"
         
         print(f"Processing file: {filename}")
 
         if os.path.exists(filename):
             image_pil = Image.open(filename)
             image_np = np.array(image_pil.convert("RGB"))
+            # image_np = np.array(image_pil.convert("L"))
 
             output_image = image_np.copy()  # 마스크 누적할 이미지
 
@@ -268,6 +345,8 @@ def check_parking_slot_using_image():
             # print("image shape:", image.shape)
 
             predictor.set_image(image_np)
+            # gray_rgb = np.stack([image_np, image_np, image_np], axis=-1).astype(np.uint8)
+            # predictor.set_image(gray_rgb)
 
             input_points = np.array([
                 [14, 556],  #1 (idx 0)
@@ -320,12 +399,12 @@ def check_parking_slot_using_image():
             #                   0      1      2      3      4      5      6      7      8       9     10     11     12     13     14     15     16     17     18     19     20     21     22     23     24     25     26     27     28     29     30     31     32     33     34     35     36     37
             #                   1      2      3      4      5      6      7      8      9      10     11     12     13     14     15     16     17     18     19     20     21     22     23     24     25     26     27     28     29     30     31     32     33     34     35     36     37     38
             #                   A1     A2     A3     A4     A5     A6     A7     A8     A9     B1     B2     B3     B4     B5     B6     B7     B8     B9     B10    B11    B12    C1     C2     C3     C4     C5     C6     C7     C8     C9     C10    C11    C12    D1     D2     D3     D4     D5
-            lower_thresholds = [2000,  4500,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3500,  3500,  3500,  3500,  3000,  2500,  1500,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  1500 ]
+            lower_thresholds = [2000,  4000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3500,  3500,  3500,  3500,  3000,  2500,  1500,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  1500 ]
             upper_thresholds = [10000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 30000, 30000, 30000, 30000, 30000]
             score_thresholds = [0.7,   0.5,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.2,   0.6,   0.5,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6  ]
             wh_thresholds    = [1,     1,     1,     2,     2,     2,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     2,     2,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1    ]
             vehicleDetected  = [False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False]
-            width_thresholds = [120,   160,   160,   170,   160,   170,   160,   160,   150,   150,   170,   170,   200,   145,   140,   130,   120,   70,    110,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   110,   110,   0    ]
+            width_thresholds = [120,   160,   160,   175,   160,   170,   160,   160,   150,   150,   170,   170,   200,   145,   140,   130,   120,   70,    110,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   110,   110,   0    ]
             height_thresholds= [160,   160,   160,   160,   160,   180,   160,   160,   220,   220,   220,   220,   220,   180,   150,   150,   150,   100,   110,   130,   130,   140,   140,   140,   140,   150,   150,   150,   150,   140,   140,   140,   130,   130,   120,   120,   120,   0    ]
             wh_direction     = [-1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    0,     0,     0,     1,     1,     1,     1,     1,     1,     1,     -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    0,     0,     0,     1,     1,     1,     1,     1,     1,     1,     1,     1    ]
             slots = [f"A{i}" for i in range(1, 13)] + [f"B{i}" for i in range(1, 13)]
@@ -349,18 +428,18 @@ def check_parking_slot_using_image():
                 [(1339, 575), (1405, 664), (1428, 649), (1371, 570)], # 17
                 [(1379, 566), (1428, 630), (1429, 594), (1401, 560)], # 18(우끝)
                 
-                [(198, 402), (138, 455), (167, 457), (228, 405)], # 19
-                [(242, 402), (183, 459), (210, 462), (279, 402)], # 20
-                [(281, 409), (220, 462), (260, 466), (318, 411)], # 21
-                [(331, 411), (271, 467), (319, 468), (372, 410)], # 22
-                [(386, 411), (333, 470), (385, 472), (434, 414)], # 23
-                [(450, 416), (399, 475), (459, 477), (502, 415)], # 24
-                [(518, 414), (477, 479), (540, 481), (572, 416)], # 25
-                [(590, 418), (559, 484), (629, 483), (647, 418)], # 26
-                [(665, 419), (649, 485), (720, 487), (724, 421)], # 27
-                [(743, 421), (741, 488), (811, 489), (802, 422)], # 28
-                [(820, 422), (833, 488), (901, 489), (877, 423)], # 29
-                [(895, 423), (921, 489), (985, 488), (956, 421)], # 30
+                [(198, 402), (138, 455), (167, 457), (228, 405)], # 19 (idx 18)
+                [(242, 402), (183, 459), (210, 462), (279, 402)], # 20 (idx 19) 
+                [(281, 409), (220, 462), (260, 466), (318, 411)], # 21 (idx 20)
+                [(331, 411), (271, 467), (319, 468), (372, 410)], # 22 (idx 21)
+                [(386, 411), (333, 470), (385, 472), (434, 414)], # 23 (idx 22)
+                [(450, 416), (399, 475), (459, 477), (502, 415)], # 24 (idx 23)
+                [(518, 414), (477, 479), (540, 481), (572, 416)], # 25 (idx 24)
+                [(590, 418), (559, 484), (629, 483), (647, 418)], # 26 (idx 25)
+                [(665, 419), (649, 485), (720, 487), (724, 421)], # 27 (idx 26)
+                [(743, 421), (741, 488), (811, 489), (802, 422)], # 28 (idx 27)
+                [(820, 422), (833, 488), (901, 489), (877, 423)], # 29 (idx 28)
+                [(895, 423), (921, 489), (985, 488), (956, 421)], # 30 (idx 29)
                 [(972, 424), (1003, 488), (1063, 488), (1020, 426)], # 31
                 [(1033, 425), (1078, 486), (1131, 487), (1080, 426)], # 32
                 [(1095, 426), (1146, 485), (1191, 485), (1136, 427)], # 33
@@ -398,8 +477,8 @@ def check_parking_slot_using_image():
                 [(350, 371), (350, 403), (372, 403), (372, 371)], # 23 (22)
                 [(424, 371), (424, 401), (455, 401), (455, 371)], # 24 (23)
                 [(471, 371), (471, 404), (501, 404), (501, 371)], # 25 (24)
-                [(579, 371), (579, 418), (623, 418), (623, 371)], # 26 (25)
-                [(665, 371), (665, 419), (695, 419), (695, 371)], # 27 (26) 
+                [(579, 371), (579, 406), (623, 406), (623, 371)], # 26 (25)
+                [(665, 371), (665, 406), (695, 406), (695, 371)], # 27 (26) 
                 [(740, 371), (740, 406), (802, 406), (802, 371)], # 28 (27)
                 [(825, 371), (825, 406), (885, 406), (885, 371)], # 29 (28)
                 [(895, 371), (895, 406), (956, 406), (956, 371)], # 30 (29)
@@ -421,6 +500,18 @@ def check_parking_slot_using_image():
                 [(165, 405), (114, 446), (129, 452), (188, 406)], # idx 18(#19)
             ]
 
+            three_point_for = [
+                [   # #1 그룹
+                    [(502, 618), (502, 626), (510, 626), (510, 618)],
+                    [(538, 612), (538, 622), (559, 622), (559, 612)],
+                    [(576, 623), (576, 634), (587, 634), (587, 623)]
+                ],
+                [   # #2 그룹
+                    [(0, 0), (0, 0), (0, 0), (0, 0)],
+                    [(0, 0), (0, 0), (0, 0), (0, 0)],
+                    [(0, 0), (0, 0), (0, 0), (0, 0)],
+                ]
+            ]
 
             second_point_for = {
                 #12: [538, 276],  # idx=15(16번째) --> 두 번째 좌표는 [144, 303]
@@ -483,7 +574,7 @@ def check_parking_slot_using_image():
                 # print(f"idx: {idx}, solidity: {solidity:.3f}")
 
                 # 필터 영역 출력
-                selected_idx = 18
+                selected_idx = 7
                 if idx == selected_idx:
                     # np.savetxt("mask_2d.csv", mask_2d, fmt="%d", delimiter=",")
                     img = Image.fromarray((mask_2d * 255).astype(np.uint8))
@@ -540,6 +631,7 @@ def check_parking_slot_using_image():
                 isPixelOverlappingUp = True
                 isPixelOverlappingRight = True
                 isPixelOverlappingLeft = True
+                isPixelOverlappingSpace = True
                 isSpecialCase = False
 
                 if idx > 0:     # 0번째는 왼쪽에 붙어 있으므로 제외, 1번째 인덱스부터 시작
@@ -566,6 +658,15 @@ def check_parking_slot_using_image():
                             if left_overlap_pixels < 50:  # 왼쪽 주차면을 침범해야 함, 침범하지 않으면 주차된 차량이 없는 경우임
                                 isPixelOverlappingLeft = False
                                 write_log(f"idx+1: {idx+1}, (L1) left_overlap_pixels = {left_overlap_pixels}{rectangles_as_tuples2[2] if idx == 18 else rectangles_as_tuples[idx-1]}")
+
+                        if idx == 7:
+                            row0 = get_overlap_pixels(three_point_for[0][0], mask_2d)
+                            row1 = get_overlap_pixels(three_point_for[0][1], mask_2d)
+                            row2 = get_overlap_pixels(three_point_for[0][2], mask_2d)
+
+                            if (row0 > 0 or row2 > 0) and row1 == 0:  # 주차면 판독
+                                isPixelOverlappingSpace = False
+
 
                     # 왼쪽 주차면을 침범하는지 확인
                     elif idx in range(10, 18) or idx in range(28, 37):   # 10~17, 28~36 영역의 자동차가 왼쪽 면에 붙으면 안 됨
@@ -725,7 +826,7 @@ def check_parking_slot_using_image():
                     width = x_max - x_min + 1
                     height = y_max - y_min + 1
 
-                wh_test = width < width_thresholds[idx] and height < height_thresholds[idx] 
+                wh_test = width <= width_thresholds[idx] and height <= height_thresholds[idx] 
 
                 # (5) mask_2d를 bool로 변환한 뒤, filtered_mask_clean과 AND 연산
                 mask_bool = mask_2d.astype(bool) & filtered_mask_clean
@@ -738,43 +839,97 @@ def check_parking_slot_using_image():
                 color_count = len(unique_colors)
 
                 # (선택) masked_pixels가 비어 있으면 cvtColor 호출을 건너뛰도록 방어
-                if masked_pixels.size == 0:
-                    hsv_pixels = np.zeros((0, 3), dtype=np.uint8)
-                else:
-                    hsv_pixels = (
-                        cv2.cvtColor(masked_pixels.reshape(-1, 1, 3), cv2.COLOR_RGB2HSV)
-                        .reshape(-1, 3)
-                    )
+                # if masked_pixels.size == 0:
+                #     hsv_pixels = np.zeros((0, 3), dtype=np.uint8)
+                # else:
+                    # hsv_pixels = (
+                    #     cv2.cvtColor(masked_pixels.reshape(-1, 1, 3), cv2.COLOR_RGB2HSV)
+                    #     .reshape(-1, 3)
+                    # )
 
                 # hsv_pixels = cv2.cvtColor(masked_pixels.reshape(-1, 1, 3), cv2.COLOR_RGB2HSV).reshape(-1, 3)
-                saturation_std = hsv_pixels[:, 1].std()
+                # saturation_std = hsv_pixels[:, 1].std()
 
-                aspect_ratio = width / height if height != 0 else 0
-                y_center = ys.mean() if len(ys) > 0 else 0
+                # aspect_ratio = width / height if height != 0 else 0
+                # y_center = ys.mean() if len(ys) > 0 else 0
 
                 print(f"=" * 120)
                 print(f"idx+1: {idx+1}, pixel_count               = {pixel_count}")
                 print(f"idx+1: {idx+1}, score_val >= score_thresh = {score_val >= score_thresh}, {score_val}, {score_thresh}")
                 print(f"idx+1: {idx+1}, pixel_count > lower       = {pixel_count > lower}, {pixel_count}, {lower}")
                 print(f"idx+1: {idx+1}, pixel_count < upper       = {pixel_count < upper}, {pixel_count}, {upper}")
-                print(f"idx+1: {idx+1}, isPixelOverlapping(LRUS)  = {isPixelOverlappingLeft}, {isPixelOverlappingRight}, {isPixelOverlappingUp}, {isSpecialCase}")
+                print(f"idx+1: {idx+1}, isPixelOverlapping(LRUPS) = {isPixelOverlappingLeft}, {isPixelOverlappingRight}, {isPixelOverlappingUp}, {isPixelOverlappingSpace}, {isSpecialCase}")
                 print(f"idx+1: {idx+1}, wh_test                   = {wh_test}, width={width}, height={height}")
                 print(f"idx+1: {idx+1}, x, y, xmax, ymax          = {x_min}, {y_min}, {x_max}, {y_max}")
-                print(f"idx+1: {idx+1}, 색상수, 채도편차          = {color_count}, {saturation_std:.2f}")
+                print(f"idx+1: {idx+1}, 색상수, 채도편차            = {color_count}")
                 print(f"idx+1: {idx+1}, pt                        = {pt}")
                 write_log(f"=" * 120)
                 write_log(f"idx+1: {idx+1}, pixel_count               = {pixel_count}")
                 write_log(f"idx+1: {idx+1}, score_val >= score_thresh = {score_val >= score_thresh}, {score_val}, {score_thresh}")
                 write_log(f"idx+1: {idx+1}, pixel_count > lower       = {pixel_count > lower}, {pixel_count}, {lower}")
                 write_log(f"idx+1: {idx+1}, pixel_count < upper       = {pixel_count < upper}, {pixel_count}, {upper}")
-                write_log(f"idx+1: {idx+1}, isPixelOverlapping(LRUS)  = {isPixelOverlappingLeft}, {isPixelOverlappingRight}, {isPixelOverlappingUp}, {isSpecialCase}")
+                write_log(f"idx+1: {idx+1}, isPixelOverlapping(LRUPS) = {isPixelOverlappingLeft}, {isPixelOverlappingRight}, {isPixelOverlappingUp}, {isPixelOverlappingSpace}, {isSpecialCase}")
                 write_log(f"idx+1: {idx+1}, wh_test                   = {wh_test}, width={width}, height={height}")
                 write_log(f"idx+1: {idx+1}, x, y, xmax, ymax          = {x_min}, {y_min}, {x_max}, {y_max}")
-                write_log(f"idx+1: {idx+1}, 색상수, 채도편차          = {color_count}, {saturation_std:.2f}")
+                write_log(f"idx+1: {idx+1}, 색상수, 채도편차            = {color_count}")
                 write_log(f"idx+1: {idx+1}, pt                        = {pt}")
 
-                if score_val >= score_thresh and pixel_count > lower and pixel_count < upper and isPixelOverlappingUp and isPixelOverlappingRight and ((isPixelOverlappingLeft and wh_test) or isSpecialCase):
+                if score_val >= score_thresh and pixel_count > lower and pixel_count < upper and isPixelOverlappingUp and isPixelOverlappingRight and isPixelOverlappingSpace and ((isPixelOverlappingLeft and wh_test) or isSpecialCase):
                     
+                    edge_cnt = count_edges_in_roi(image_np, mask_2d, x_min, y_min, width, height)
+
+                    print(f"Number of edge pixels (np): {edge_cnt}")
+                    write_log(f"edges_roi: {edge_cnt}")
+
+                    # 5) 결과 표시
+                    # cv2.imshow('ROI Edges', edges_roi)
+                    # cv2.waitKey(0)
+                    # cv2.destroyAllWindows()
+
+                    # mask_u8 = (mask_2d*255).astype(np.uint8)
+                    # # edges = cv2.Canny(mask_u8, 5, 250)
+                    # # edge_density = cv2.countNonZero(edges[y_min:y_min+height, x_min:x_min+width]) / (width*height)
+
+                    # # if idx == selected_idx or idx == selected_idx + 1:
+                    # #     cv2.imshow('Edges', edges)
+                    # #     cv2.waitKey(0)
+                    # #     cv2.destroyAllWindows()
+
+                    # sobelx = cv2.Sobel(mask_u8, cv2.CV_64F, 1, 0, ksize=3)
+                    # sobely = cv2.Sobel(mask_u8, cv2.CV_64F, 0, 1, ksize=3)
+
+                    # # 2) 그래디언트 크기(진폭) 계산
+                    # grad_mag = np.sqrt(sobelx**2 + sobely**2)
+
+                    # # 3) 0~255 스케일로 정규화 후 uint8 변환
+                    # grad_mag = np.uint8(255 * (grad_mag / (grad_mag.max() + 1e-6)))
+
+                    # # 4) 임계값(threshold)으로 바이너리 에지 맵 생성
+                    # #    임계값은 실험을 통해 조절하세요 (예: 50~100 사이)
+                    # thresh_val = 1
+                    # _, edges = cv2.threshold(grad_mag, thresh_val, 255, cv2.THRESH_BINARY)
+
+                    # # 5) ROI 안에서 에지 밀도 계산
+                    # roi = edges[y_min:y_min+height, x_min:x_min+width]
+                    # edge_density = cv2.countNonZero(roi) / float(width * height)
+                    # print(f"edge_density (Sobel): {edge_density:.4f}")
+
+                    # # 6) 디버그용으로 에지 영상 보기
+                    # if idx == selected_idx or idx == selected_idx + 1:
+                    #     cv2.imshow('Sobel Edges', edges)
+                    #     cv2.waitKey(0)
+                    #     cv2.destroyAllWindows()
+
+                    # print(f"edge_density: {edge_density:.4f}")
+                    # write_log(f"edge_density: {edge_density:.4f}")
+                    # if edge_density < 0.01:
+                    #     print(f"## SLOLT ERROR ##")
+                    #     write_log(f"## SLOLT ERROR ##")
+                    # else:
+                    #     print(f"## SLOT SUCCESSED ##")
+                    #     write_log(f"## SLOT SUCCESSED ##")
+                        # write_log(f"## SLOT DETECTED ##")
+
                     vehicleDetected[idx] = True
                     occupiedCount += 1
 
@@ -868,15 +1023,77 @@ def check_parking_slot_using_image():
                     ## print(f"idx+1: {idx+1}, is_overlap_pixels        ={is_overlap_pixels}")
                     ## print(f"idx+1: {idx+1}, pt                       ={pt}")
                     print(f"-" * 120)
-                    print(f"idx+1: {idx+1}, [# XXX #] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, Score={score_val:.3f}, width={width}, height={height}, 색상수={color_count}, 채도편차={saturation_std:.2f}, 비율={aspect_ratio:.2f}")
+                    print(f"idx+1: {idx+1}, [# XXX #] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, Score={score_val:.3f}, width={width}, height={height}, 색상수={color_count} ")
                     print(f"=-" * 60)
                     print(f" " * 10)
                     print(f" " * 10)
                     write_log(f"-" * 120)
-                    write_log(f"idx+1: {idx+1}, [# XXX #] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, Score={score_val:.3f}, width={width}, height={height}, 색상수={color_count}, 채도편차={saturation_std:.2f}, 비율={aspect_ratio:.2f}")
+                    write_log(f"idx+1: {idx+1}, [# XXX #] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, Score={score_val:.3f}, width={width}, height={height}, 색상수={color_count}")
                     write_log(f"=-" * 60)
                     write_log(f" " * 10)
                     write_log(f" " * 10)
+
+                    if idx == selected_idx or idx == selected_idx + 1:
+                        # 1) 원본 BGR 이미지 (np.ndarray) → 그레이스케일
+                        gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
+
+                        # 2) 관심 영역(ROI) 잘라내기
+                        x0, y0 = x_min, y_min
+                        x1, y1 = x_min + width, y_min + height
+                        roi_gray = gray[y0:y1, x0:x1]
+                        mask_roi = (mask_2d[y0:y1, x0:x1].astype(np.uint8) * 255)  # uint8, 0 또는 255
+
+                        # 3) 마스크된 그레이스케일 영상 생성
+                        # bitwise_and 로 mask=True인 픽셀만 남김
+                        roi_masked = cv2.bitwise_and(roi_gray, roi_gray, mask=mask_roi)
+
+                        # 4) 노이즈 제거 (선택)
+                        roi_blur = cv2.GaussianBlur(roi_masked, (5, 5), 0)
+
+                        # 5) Canny 에지 검출 — 오직 마스크된 영역에서만 수행
+                        edges_roi = cv2.Canny(roi_blur, 50, 150)
+                        num_edges_np = np.count_nonzero(edges_roi)
+                        print(f"Number of edge pixels (np): {num_edges_np}")
+                        write_log(f"edges_roi: {num_edges_np}")
+
+                        # 5) 결과 표시
+                        cv2.imshow('ROI Edges', edges_roi)
+                        cv2.waitKey(0)
+                        cv2.destroyAllWindows()
+
+                    # mask_u8 = (mask_2d*255).astype(np.uint8)
+                    # # edges = cv2.Canny(mask_u8, 5, 250)
+                    # # edge_density = cv2.countNonZero(edges[y_min:y_min+height, x_min:x_min+width]) / (width*height)
+
+                    # # if idx == selected_idx or idx == selected_idx + 1:
+                    # #     cv2.imshow('Edges', edges)
+                    # #     cv2.waitKey(0)
+                    # #     cv2.destroyAllWindows()
+
+                    # sobelx = cv2.Sobel(mask_u8, cv2.CV_64F, 1, 0, ksize=3)
+                    # sobely = cv2.Sobel(mask_u8, cv2.CV_64F, 0, 1, ksize=3)
+
+                    # # 2) 그래디언트 크기(진폭) 계산
+                    # grad_mag = np.sqrt(sobelx**2 + sobely**2)
+
+                    # # 3) 0~255 스케일로 정규화 후 uint8 변환
+                    # grad_mag = np.uint8(255 * (grad_mag / (grad_mag.max() + 1e-6)))
+
+                    # # 4) 임계값(threshold)으로 바이너리 에지 맵 생성
+                    # #    임계값은 실험을 통해 조절하세요 (예: 50~100 사이)
+                    # thresh_val = 0
+                    # _, edges = cv2.threshold(grad_mag, thresh_val, 255, cv2.THRESH_BINARY)
+
+                    # # 5) ROI 안에서 에지 밀도 계산
+                    # roi = edges[y_min:y_min+height, x_min:x_min+width]
+                    # edge_density = cv2.countNonZero(roi) / float(width * height)
+                    # print(f"edge_density (Sobel): {edge_density:.4f}")
+
+                    # # 6) 디버그용으로 에지 영상 보기
+                    # if idx == selected_idx or idx == selected_idx + 1:
+                    #     cv2.imshow('Sobel Edges', edges)
+                    #     cv2.waitKey(0)
+                    #     cv2.destroyAllWindows()
 
 
                     emptyCount += 1
