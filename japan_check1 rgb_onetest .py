@@ -337,9 +337,11 @@ def check_parking_slot_using_image():
             try:
                     font = ImageFont.truetype("arial.ttf", 15)  # 시스템 폰트가 있으면 사용
                     font2 = ImageFont.truetype("arial.ttf", 100)
+                    font_edge = ImageFont.truetype("arial.ttf", 20)  # 시스템 폰트가 있으면 사용
             except:
                     font = ImageFont.load_default()
                     font2 = ImageFont.load_default()
+                    font_edge = ImageFont.truetype("arial.ttf", 20)  # 시스템 폰트가 있으면 사용
 
             # print("cwd:", os.getcwd(), "latest file:", filename)
             # print("image shape:", image.shape)
@@ -853,6 +855,8 @@ def check_parking_slot_using_image():
                 # aspect_ratio = width / height if height != 0 else 0
                 # y_center = ys.mean() if len(ys) > 0 else 0
 
+                edge_cnt = count_edges_in_roi(image_np, mask_2d, x_min, y_min, width, height)
+
                 print(f"=" * 120)
                 print(f"idx+1: {idx+1}, pixel_count               = {pixel_count}")
                 print(f"idx+1: {idx+1}, score_val >= score_thresh = {score_val >= score_thresh}, {score_val}, {score_thresh}")
@@ -861,7 +865,7 @@ def check_parking_slot_using_image():
                 print(f"idx+1: {idx+1}, isPixelOverlapping(LRUPS) = {isPixelOverlappingLeft}, {isPixelOverlappingRight}, {isPixelOverlappingUp}, {isPixelOverlappingSpace}, {isSpecialCase}")
                 print(f"idx+1: {idx+1}, wh_test                   = {wh_test}, width={width}, height={height}")
                 print(f"idx+1: {idx+1}, x, y, xmax, ymax          = {x_min}, {y_min}, {x_max}, {y_max}")
-                print(f"idx+1: {idx+1}, 색상수, 채도편차            = {color_count}")
+                print(f"idx+1: {idx+1}, colors, edge_cnt          = {color_count}, {edge_cnt}")
                 print(f"idx+1: {idx+1}, pt                        = {pt}")
                 write_log(f"=" * 120)
                 write_log(f"idx+1: {idx+1}, pixel_count               = {pixel_count}")
@@ -871,65 +875,11 @@ def check_parking_slot_using_image():
                 write_log(f"idx+1: {idx+1}, isPixelOverlapping(LRUPS) = {isPixelOverlappingLeft}, {isPixelOverlappingRight}, {isPixelOverlappingUp}, {isPixelOverlappingSpace}, {isSpecialCase}")
                 write_log(f"idx+1: {idx+1}, wh_test                   = {wh_test}, width={width}, height={height}")
                 write_log(f"idx+1: {idx+1}, x, y, xmax, ymax          = {x_min}, {y_min}, {x_max}, {y_max}")
-                write_log(f"idx+1: {idx+1}, 색상수, 채도편차            = {color_count}")
+                write_log(f"idx+1: {idx+1}, colors, edge_cnt          = {color_count}, {edge_cnt}")
                 write_log(f"idx+1: {idx+1}, pt                        = {pt}")
 
                 if score_val >= score_thresh and pixel_count > lower and pixel_count < upper and isPixelOverlappingUp and isPixelOverlappingRight and isPixelOverlappingSpace and ((isPixelOverlappingLeft and wh_test) or isSpecialCase):
                     
-                    edge_cnt = count_edges_in_roi(image_np, mask_2d, x_min, y_min, width, height)
-
-                    print(f"Number of edge pixels (np): {edge_cnt}")
-                    write_log(f"edges_roi: {edge_cnt}")
-
-                    # 5) 결과 표시
-                    # cv2.imshow('ROI Edges', edges_roi)
-                    # cv2.waitKey(0)
-                    # cv2.destroyAllWindows()
-
-                    # mask_u8 = (mask_2d*255).astype(np.uint8)
-                    # # edges = cv2.Canny(mask_u8, 5, 250)
-                    # # edge_density = cv2.countNonZero(edges[y_min:y_min+height, x_min:x_min+width]) / (width*height)
-
-                    # # if idx == selected_idx or idx == selected_idx + 1:
-                    # #     cv2.imshow('Edges', edges)
-                    # #     cv2.waitKey(0)
-                    # #     cv2.destroyAllWindows()
-
-                    # sobelx = cv2.Sobel(mask_u8, cv2.CV_64F, 1, 0, ksize=3)
-                    # sobely = cv2.Sobel(mask_u8, cv2.CV_64F, 0, 1, ksize=3)
-
-                    # # 2) 그래디언트 크기(진폭) 계산
-                    # grad_mag = np.sqrt(sobelx**2 + sobely**2)
-
-                    # # 3) 0~255 스케일로 정규화 후 uint8 변환
-                    # grad_mag = np.uint8(255 * (grad_mag / (grad_mag.max() + 1e-6)))
-
-                    # # 4) 임계값(threshold)으로 바이너리 에지 맵 생성
-                    # #    임계값은 실험을 통해 조절하세요 (예: 50~100 사이)
-                    # thresh_val = 1
-                    # _, edges = cv2.threshold(grad_mag, thresh_val, 255, cv2.THRESH_BINARY)
-
-                    # # 5) ROI 안에서 에지 밀도 계산
-                    # roi = edges[y_min:y_min+height, x_min:x_min+width]
-                    # edge_density = cv2.countNonZero(roi) / float(width * height)
-                    # print(f"edge_density (Sobel): {edge_density:.4f}")
-
-                    # # 6) 디버그용으로 에지 영상 보기
-                    # if idx == selected_idx or idx == selected_idx + 1:
-                    #     cv2.imshow('Sobel Edges', edges)
-                    #     cv2.waitKey(0)
-                    #     cv2.destroyAllWindows()
-
-                    # print(f"edge_density: {edge_density:.4f}")
-                    # write_log(f"edge_density: {edge_density:.4f}")
-                    # if edge_density < 0.01:
-                    #     print(f"## SLOLT ERROR ##")
-                    #     write_log(f"## SLOLT ERROR ##")
-                    # else:
-                    #     print(f"## SLOT SUCCESSED ##")
-                    #     write_log(f"## SLOT SUCCESSED ##")
-                        # write_log(f"## SLOT DETECTED ##")
-
                     vehicleDetected[idx] = True
                     occupiedCount += 1
 
@@ -952,7 +902,8 @@ def check_parking_slot_using_image():
 
                     # 텍스트 출력
                     x, y = pt
-                    draw.text((x, y - 40), f"{idx}", fill="yellow", font=font)
+                    draw.text((x-10, y - 40), f"{idx}", fill="yellow", font=font)
+                    draw.text((x-10, y - 25), f"{edge_cnt}", fill="yellow", font=font_edge)
                     # draw.text((x-30, y - 40), f"{pixel_count}", fill="yellow", font=font)
                     # if score_val >= 0.9:
                     #     draw.text((x-30, y - 10), f"{score_val:.3f}", fill="yellow", font=font)
@@ -1033,69 +984,6 @@ def check_parking_slot_using_image():
                     write_log(f" " * 10)
                     write_log(f" " * 10)
 
-                    if idx == selected_idx or idx == selected_idx + 1:
-                        # 1) 원본 BGR 이미지 (np.ndarray) → 그레이스케일
-                        gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
-
-                        # 2) 관심 영역(ROI) 잘라내기
-                        x0, y0 = x_min, y_min
-                        x1, y1 = x_min + width, y_min + height
-                        roi_gray = gray[y0:y1, x0:x1]
-                        mask_roi = (mask_2d[y0:y1, x0:x1].astype(np.uint8) * 255)  # uint8, 0 또는 255
-
-                        # 3) 마스크된 그레이스케일 영상 생성
-                        # bitwise_and 로 mask=True인 픽셀만 남김
-                        roi_masked = cv2.bitwise_and(roi_gray, roi_gray, mask=mask_roi)
-
-                        # 4) 노이즈 제거 (선택)
-                        roi_blur = cv2.GaussianBlur(roi_masked, (5, 5), 0)
-
-                        # 5) Canny 에지 검출 — 오직 마스크된 영역에서만 수행
-                        edges_roi = cv2.Canny(roi_blur, 50, 150)
-                        num_edges_np = np.count_nonzero(edges_roi)
-                        print(f"Number of edge pixels (np): {num_edges_np}")
-                        write_log(f"edges_roi: {num_edges_np}")
-
-                        # 5) 결과 표시
-                        cv2.imshow('ROI Edges', edges_roi)
-                        cv2.waitKey(0)
-                        cv2.destroyAllWindows()
-
-                    # mask_u8 = (mask_2d*255).astype(np.uint8)
-                    # # edges = cv2.Canny(mask_u8, 5, 250)
-                    # # edge_density = cv2.countNonZero(edges[y_min:y_min+height, x_min:x_min+width]) / (width*height)
-
-                    # # if idx == selected_idx or idx == selected_idx + 1:
-                    # #     cv2.imshow('Edges', edges)
-                    # #     cv2.waitKey(0)
-                    # #     cv2.destroyAllWindows()
-
-                    # sobelx = cv2.Sobel(mask_u8, cv2.CV_64F, 1, 0, ksize=3)
-                    # sobely = cv2.Sobel(mask_u8, cv2.CV_64F, 0, 1, ksize=3)
-
-                    # # 2) 그래디언트 크기(진폭) 계산
-                    # grad_mag = np.sqrt(sobelx**2 + sobely**2)
-
-                    # # 3) 0~255 스케일로 정규화 후 uint8 변환
-                    # grad_mag = np.uint8(255 * (grad_mag / (grad_mag.max() + 1e-6)))
-
-                    # # 4) 임계값(threshold)으로 바이너리 에지 맵 생성
-                    # #    임계값은 실험을 통해 조절하세요 (예: 50~100 사이)
-                    # thresh_val = 0
-                    # _, edges = cv2.threshold(grad_mag, thresh_val, 255, cv2.THRESH_BINARY)
-
-                    # # 5) ROI 안에서 에지 밀도 계산
-                    # roi = edges[y_min:y_min+height, x_min:x_min+width]
-                    # edge_density = cv2.countNonZero(roi) / float(width * height)
-                    # print(f"edge_density (Sobel): {edge_density:.4f}")
-
-                    # # 6) 디버그용으로 에지 영상 보기
-                    # if idx == selected_idx or idx == selected_idx + 1:
-                    #     cv2.imshow('Sobel Edges', edges)
-                    #     cv2.waitKey(0)
-                    #     cv2.destroyAllWindows()
-
-
                     emptyCount += 1
 
                     if pixel_count < 50000:
@@ -1117,10 +1005,11 @@ def check_parking_slot_using_image():
 
                         # 텍스트 출력
                         x, y = pt
-                        draw.text((x, y - 40), f"{idx}", fill="yellow", font=font)
-                        draw.text((x-10, y - 10), f"{status}", fill="yellow", font=font)
+                        draw.text((x-10, y - 40), f"{idx}", fill="yellow", font=font)
+                        draw.text((x-10, y - 25), f"{status}", fill="yellow", font=font)
+                        draw.text((x-10, y - 10), f"{edge_cnt}", fill="yellow", font=font_edge)
                         if wh_test == False:
-                            draw.text((x-30, y + 10), f"{width:.0f},{height:.0f}", fill="red", font=font)   
+                            draw.text((x-30, y + 5), f"{width:.0f},{height:.0f}", fill="red", font=font)   
                         # draw.text((x-30, y - 40), f"{pixel_count}", fill="red", font=font)
                         # if score_val >= 0.9:
                         #     draw.text((x-30, y - 10), f"{score_val:.3f}", fill="red", font=font)
@@ -1154,10 +1043,11 @@ def check_parking_slot_using_image():
 
                         # 텍스트 출력
                         x, y = pt
-                        draw.text((x, y - 40), f"{idx}", fill="yellow", font=font)
-                        draw.text((x-10, y - 10), f"{status}", fill="yellow", font=font)
+                        draw.text((x-10, y - 40), f"{idx}", fill="yellow", font=font)
+                        draw.text((x-10, y - 25), f"{status}", fill="yellow", font=font)
+                        draw.text((x-10, y - 10), f"{edge_cnt}", fill="yellow", font=font_edge)
                         if wh_test == False:
-                            draw.text((x-30, y + 10), f"{width:.0f},{height:.0f}", fill="red", font=font)   
+                            draw.text((x-30, y + 5), f"{width:.0f},{height:.0f}", fill="red", font=font)   
                         # draw.text((x-30, y - 40), f"{pixel_count}", fill="green", font=font)
                         # if score_val >= 0.9:
                         #     draw.text((x-30, y - 10), f"{score_val:.3f}", fill="green", font=font)

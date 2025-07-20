@@ -52,6 +52,55 @@ elif device.type == "mps":
 
 np.random.seed(3)
 
+def count_edges_in_roi(
+    image_np: np.ndarray,
+    mask_2d: np.ndarray,
+    x_min: int,
+    y_min: int,
+    width: int,
+    height: int,
+    low_thresh: int = 50,
+    high_thresh: int = 150,
+    blur_ksize: tuple = (5, 5)
+) -> int:
+    """
+    mask_2d로 정의된 영역 안에서 Canny 에지를 검출하고 에지 픽셀 수를 반환합니다.
+
+    Args:
+        image_np: (H, W, 3) RGB 이미지
+        mask_2d:  (H, W) bool 또는 0/1 바이너리 마스크
+        x_min:    ROI 왼쪽 상단 X 좌표
+        y_min:    ROI 왼쪽 상단 Y 좌표
+        width:    ROI 너비
+        height:   ROI 높이
+        low_thresh:  Canny 하한값
+        high_thresh: Canny 상한값
+        blur_ksize:  GaussianBlur 커널 크기
+
+    Returns:
+        edge_count: ROI 내에서 검출된 에지 픽셀(255) 개수
+    """
+    # 1) 그레이스케일 변환
+    gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
+
+    # 2) ROI & 마스크 영역 잘라내기
+    roi_gray = gray[y_min:y_min+height, x_min:x_min+width]
+    mask_roi = (mask_2d[y_min:y_min+height, x_min:x_min+width]
+                .astype(np.uint8) * 255)
+
+    # 3) 마스크 적용
+    roi_masked = cv2.bitwise_and(roi_gray, roi_gray, mask=mask_roi)
+
+    # 4) 노이즈 제거
+    roi_blur = cv2.GaussianBlur(roi_masked, blur_ksize, 0)
+
+    # 5) Canny 에지 검출
+    edges_roi = cv2.Canny(roi_blur, low_thresh, high_thresh)
+
+    # 6) 에지 픽셀 수 세기
+    edge_count = int(np.count_nonzero(edges_roi))
+    return edge_count
+
 def show_mask(mask, ax, random_color=False, borders = True):
     
     if random_color:
@@ -206,9 +255,9 @@ predictor = SAM2ImagePredictor(sam2_model)
 file_template = "1_*.png" # 1_20250711_235044sshot
 #folder_path = 'D:/Projects/vision/yolo/images/mp4/japan/'
 folder_path = 'D:/Projects/vision/capture_images/20250713/'
-folder_completed_path = 'D:/Projects/vision/capture_images/20250713/completed2/'
+folder_completed_path = 'D:/Projects/vision/capture_images/20250713/completed3/'
 
-start_index = 1381 #0
+start_index = 0
 end_index = 2021 #1443
 index_step = 1
 
@@ -782,6 +831,8 @@ def check_parking_slot_using_image():
                 # aspect_ratio = width / height if height != 0 else 0
                 # y_center = ys.mean() if len(ys) > 0 else 0
 
+                edge_cnt = count_edges_in_roi(image_np, mask_2d, x_min, y_min, width, height)
+
                 write_log(f"=" * 120)
                 write_log(f"idx+1: {idx+1}, pixel_count               = {pixel_count}")
                 write_log(f"idx+1: {idx+1}, score_val >= score_thresh = {score_val >= score_thresh}, {score_val}, {score_thresh}")
@@ -790,7 +841,7 @@ def check_parking_slot_using_image():
                 write_log(f"idx+1: {idx+1}, isPixelOverlapping(LRUPS) = {isPixelOverlappingLeft}, {isPixelOverlappingRight}, {isPixelOverlappingUp}, {isPixelOverlappingSpace}, {isSpecialCase}")
                 write_log(f"idx+1: {idx+1}, wh_test                   = {wh_test}, width={width}, height={height}")
                 write_log(f"idx+1: {idx+1}, x, y, xmax, ymax          = {x_min}, {y_min}, {x_max}, {y_max}")
-                write_log(f"idx+1: {idx+1}, 색상수, 채도편차          = {color_count}")
+                write_log(f"idx+1: {idx+1}, colors, edge_cnt          = {color_count}, {edge_cnt}")
                 write_log(f"idx+1: {idx+1}, pt                        = {pt}")
 
                 if score_val >= score_thresh and pixel_count > lower and pixel_count < upper and isPixelOverlappingUp and isPixelOverlappingRight and isPixelOverlappingSpace and ((isPixelOverlappingLeft and wh_test) or isSpecialCase):
@@ -817,7 +868,8 @@ def check_parking_slot_using_image():
 
                     # 텍스트 출력
                     x, y = pt
-                    draw.text((x, y - 40), f"{idx}", fill="yellow", font=font)
+                    draw.text((x-10, y - 40), f"{idx}", fill="yellow", font=font)
+                    draw.text((x-10, y - 25), f"{edge_cnt}", fill="yellow", font=font_edge)
                     # draw.text((x-30, y - 40), f"{pixel_count}", fill="yellow", font=font)
                     # if score_val >= 0.9:
                     #     draw.text((x-30, y - 10), f"{score_val:.3f}", fill="yellow", font=font)
@@ -866,10 +918,11 @@ def check_parking_slot_using_image():
 
                         # 텍스트 출력
                         x, y = pt
-                        draw.text((x, y - 40), f"{idx}", fill="yellow", font=font)
-                        draw.text((x-10, y - 10), f"{status}", fill="yellow", font=font)
+                        draw.text((x-10, y - 40), f"{idx}", fill="yellow", font=font)
+                        draw.text((x-10, y - 25), f"{status}", fill="yellow", font=font)
+                        draw.text((x-10, y - 10), f"{edge_cnt}", fill="yellow", font=font_edge)
                         if wh_test == False:
-                            draw.text((x-30, y + 10), f"{width:.0f},{height:.0f}", fill="red", font=font)   
+                            draw.text((x-30, y + 5), f"{width:.0f},{height:.0f}", fill="red", font=font)   
                         # draw.text((x-30, y - 40), f"{pixel_count}", fill="red", font=font)
                         # if score_val >= 0.9:
                         #     draw.text((x-30, y - 10), f"{score_val:.3f}", fill="red", font=font)
@@ -904,10 +957,11 @@ def check_parking_slot_using_image():
 
                         # 텍스트 출력
                         x, y = pt
-                        draw.text((x, y - 40), f"{idx}", fill="yellow", font=font)
-                        draw.text((x-10, y - 10), f"{status}", fill="yellow", font=font)
+                        draw.text((x-10, y - 40), f"{idx}", fill="yellow", font=font)
+                        draw.text((x-10, y - 25), f"{status}", fill="yellow", font=font)
+                        draw.text((x-10, y - 10), f"{edge_cnt}", fill="yellow", font=font_edge)
                         if wh_test == False:
-                            draw.text((x-30, y + 10), f"{width:.0f},{height:.0f}", fill="red", font=font)   
+                            draw.text((x-30, y + 5), f"{width:.0f},{height:.0f}", fill="red", font=font)   
                         # draw.text((x-30, y - 40), f"{pixel_count}", fill="green", font=font)
                         # if score_val >= 0.9:
                         #     draw.text((x-30, y - 10), f"{score_val:.3f}", fill="green", font=font)
