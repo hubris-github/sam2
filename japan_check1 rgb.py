@@ -80,6 +80,18 @@ def count_edges_in_roi(
     Returns:
         edge_count: ROI 내에서 검출된 에지 픽셀(255) 개수
     """
+    
+    H, W = mask_2d.shape
+    if width <= 0 or height <= 0:
+        return 0
+    x0, y0 = x_min, y_min
+    x1, y1 = x_min + width, y_min + height
+    # 영상 범위 밖이면 잘라 맞추기
+    x0, y0 = max(0, x0), max(0, y0)
+    x1, y1 = min(W, x1), min(H, y1)
+    if x0 >= x1 or y0 >= y1:
+        return 0
+    
     # 1) 그레이스케일 변환
     gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
 
@@ -88,8 +100,12 @@ def count_edges_in_roi(
     mask_roi = (mask_2d[y_min:y_min+height, x_min:x_min+width]
                 .astype(np.uint8) * 255)
 
+    # 4) 마스크된 픽셀 체크
+    if mask_roi.sum() == 0:
+        return 0
+    
     # 3) 마스크 적용
-    roi_masked = cv2.bitwise_and(roi_gray, roi_gray, mask=mask_roi)
+    roi_masked = cv2.bitwise_and(roi_gray, roi_gray, mask=mask_roi)    
 
     # 4) 노이즈 제거
     roi_blur = cv2.GaussianBlur(roi_masked, blur_ksize, 0)
@@ -257,7 +273,7 @@ file_template = "1_*.png" # 1_20250711_235044sshot
 folder_path = 'D:/Projects/vision/capture_images/20250713/'
 folder_completed_path = 'D:/Projects/vision/capture_images/20250713/completed3/'
 
-start_index = 0
+start_index = 127
 end_index = 2021 #1443
 index_step = 1
 
@@ -330,12 +346,14 @@ def check_parking_slot_using_image():
             draw = ImageDraw.Draw(output_pil)
 
             try:
-                    font = ImageFont.truetype("arial.ttf", 15)  # 시스템 폰트가 있으면 사용
-                    font2 = ImageFont.truetype("arial.ttf", 100)
+                    font = ImageFont.truetype("arial.ttf", 15)
+                    font30 = ImageFont.truetype("arial.ttf", 30)
+                    font100 = ImageFont.truetype("arial.ttf", 100)
                     font_edge = ImageFont.truetype("arial.ttf", 20)
             except:
                     font = ImageFont.load_default()
-                    font2 = ImageFont.load_default()
+                    font30 = ImageFont.truetype("arial.ttf", 30)
+                    font100 = ImageFont.load_default()
                     font_edge = ImageFont.truetype("arial.ttf", 20)
 
             # print("cwd:", os.getcwd(), "latest file:", filename)
@@ -401,7 +419,7 @@ def check_parking_slot_using_image():
             score_thresholds = [0.7,   0.5,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.2,   0.6,   0.5,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6  ]
             wh_thresholds    = [1,     1,     1,     2,     2,     2,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     2,     2,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1    ]
             vehicleDetected  = [False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False]
-            width_thresholds = [120,   160,   160,   175,   160,   170,   160,   160,   150,   150,   170,   170,   200,   145,   140,   130,   120,   70,    110,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   110,   110,   0    ]
+            width_thresholds = [120,   160,   160,   175,   160,   170,   160,   160,   150,   150,   170,   170,   200,   145,   140,   130,   120,   70,    110,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   120,   130,   110,   110,   0    ]
             height_thresholds= [160,   160,   160,   160,   160,   180,   160,   160,   220,   220,   220,   220,   220,   180,   150,   150,   150,   100,   110,   130,   130,   140,   140,   140,   140,   150,   150,   150,   150,   140,   140,   140,   130,   130,   120,   120,   120,   0    ]
             wh_direction     = [-1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    0,     0,     0,     1,     1,     1,     1,     1,     1,     1,     -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    0,     0,     0,     1,     1,     1,     1,     1,     1,     1,     1,     1    ]
             slots = [f"A{i}" for i in range(1, 13)] + [f"B{i}" for i in range(1, 13)]
@@ -870,6 +888,7 @@ def check_parking_slot_using_image():
 
                     # 텍스트 출력
                     x, y = pt
+                    draw.text((x-10, y - 70), f"T", fill="yellow", font=font30)
                     draw.text((x-10, y - 40), f"{idx}", fill="yellow", font=font)
                     draw.text((x-10, y - 25), f"{edge_cnt}", fill="yellow", font=font_edge)
                     # draw.text((x-30, y - 40), f"{pixel_count}", fill="yellow", font=font)
@@ -900,9 +919,8 @@ def check_parking_slot_using_image():
 
                     emptyCount += 1
 
-                    if pixel_count < 50000:
-                        # if idx == selected_idx:
-                        #     output_image = overlay_mask(output_image, mask_2d, color=(255, 0, 0), alpha=0.5)
+                    if pixel_count < 30000:
+                        output_image = overlay_mask(output_image, mask_2d, color=(255, 0, 0), alpha=0.5)
                         output_pil = Image.fromarray(output_image)
                         draw = ImageDraw.Draw(output_pil)  # draw 다시 초기화 필요 (PIL 객체 변경됐기 때문)
 
@@ -979,7 +997,7 @@ def check_parking_slot_using_image():
 
             output_pil = Image.fromarray(output_image)
             draw = ImageDraw.Draw(output_pil)   
-            draw.text((600,  270), f"{occupiedCount:.0f} / {emptyCount:.0f}", fill="yellow", font=font2)    
+            draw.text((600,  270), f"{occupiedCount:.0f} / {emptyCount:.0f}", fill="yellow", font=font100)    
             output_image = np.array(output_pil)   
 
             file_name = os.path.basename(filename)
