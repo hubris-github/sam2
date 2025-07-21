@@ -271,9 +271,9 @@ predictor = SAM2ImagePredictor(sam2_model)
 file_template = "1_*.png" # 1_20250711_235044sshot
 #folder_path = 'D:/Projects/vision/yolo/images/mp4/japan/'
 folder_path = 'D:/Projects/vision/capture_images/20250713/'
-folder_completed_path = 'D:/Projects/vision/capture_images/20250713/completed3/'
+folder_completed_path = 'D:/Projects/vision/capture_images/20250713/completed5/'
 
-start_index = 127
+start_index = 0
 end_index = 2021 #1443
 index_step = 1
 
@@ -889,8 +889,11 @@ def check_parking_slot_using_image():
                     # 텍스트 출력
                     x, y = pt
                     draw.text((x-10, y - 70), f"T", fill="yellow", font=font30)
-                    draw.text((x-10, y - 40), f"{idx}", fill="yellow", font=font)
-                    draw.text((x-10, y - 25), f"{edge_cnt}", fill="yellow", font=font_edge)
+                    draw.text((x-10, y - 40), f"{idx}", fill="green", font=font)
+                    if idx < 18 and edge_cnt < 1000:
+                        draw.text((x-10, y - 25), f"{edge_cnt}", fill="white", font=font_edge)
+                    else:
+                        draw.text((x-10, y - 25), f"{edge_cnt}", fill="yellow", font=font_edge)
                     # draw.text((x-30, y - 40), f"{pixel_count}", fill="yellow", font=font)
                     # if score_val >= 0.9:
                     #     draw.text((x-30, y - 10), f"{score_val:.3f}", fill="yellow", font=font)
@@ -938,7 +941,8 @@ def check_parking_slot_using_image():
 
                         # 텍스트 출력
                         x, y = pt
-                        draw.text((x-10, y - 40), f"{idx}", fill="yellow", font=font)
+                        draw.text((x-10, y - 70), f"{score_thresh*100:.0f}", fill="yellow", font=font30)
+                        draw.text((x-10, y - 40), f"{idx}", fill="green", font=font)
                         draw.text((x-10, y - 25), f"{status}", fill="yellow", font=font)
                         draw.text((x-10, y - 10), f"{edge_cnt}", fill="yellow", font=font_edge)
                         if wh_test == False:
@@ -977,7 +981,8 @@ def check_parking_slot_using_image():
 
                         # 텍스트 출력
                         x, y = pt
-                        draw.text((x-10, y - 40), f"{idx}", fill="yellow", font=font)
+                        draw.text((x-10, y - 70), f"{score_thresh*100:.0f}", fill="red", font=font30)
+                        draw.text((x-10, y - 40), f"{idx}", fill="green", font=font)
                         draw.text((x-10, y - 25), f"{status}", fill="yellow", font=font)
                         draw.text((x-10, y - 10), f"{edge_cnt}", fill="yellow", font=font_edge)
                         if wh_test == False:
