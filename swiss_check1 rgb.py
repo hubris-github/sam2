@@ -272,7 +272,7 @@ predictor = SAM2ImagePredictor(sam2_model)
 folder_path = 'D:/Projects/vision/capture_images/20250713/'
 folder_completed_path = 'D:/Projects/vision/capture_images/20250713/parquery2/'
 
-start_index = 0
+start_index = 158 #0
 end_index = 1037
 index_step = 1
 

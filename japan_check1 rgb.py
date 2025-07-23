@@ -271,7 +271,7 @@ predictor = SAM2ImagePredictor(sam2_model)
 file_template = "1_*.png" # 1_20250711_235044sshot
 #folder_path = 'D:/Projects/vision/yolo/images/mp4/japan/'
 folder_path = 'D:/Projects/vision/capture_images/20250713/'
-folder_completed_path = 'D:/Projects/vision/capture_images/20250713/completed5/'
+folder_completed_path = 'D:/Projects/vision/capture_images/20250713/completed6/'
 
 start_index = 0
 end_index = 2021 #1443
@@ -497,14 +497,21 @@ def check_parking_slot_using_image():
                 [(740, 371), (740, 406), (802, 406), (802, 371)], # 28 (27)
                 [(825, 371), (825, 406), (885, 406), (885, 371)], # 29 (28)
                 [(895, 371), (895, 406), (956, 406), (956, 371)], # 30 (29)
-                [(976, 392), (976, 412), (1023,412), (1023,392)], # 31 (30) 
-                [(1052,392), (1052,412), (1088,412), (1088,392)], # 32 (31) ##
+                [(976, 392), (976, 416), (1023,416), (1032,392)], # 31 (30) 
+                [(1052,392), (1052,412), (1088,412), (1088,392)], # 32 (31)
                 [(1104,395), (1104,411), (1155,411), (1155,395)], # 33 (32) 
                 [(1187,398), (1187,411), (1195,411), (1195,398)], # 34 (33)
                 [(1249,393), (1249,402), (1275,413), (1275,393)], # 35 (34)
                 [(1300,397), (1300,417), (1304,417), (1304,397)], # 36 (35)
                 [(1318,397), (1318,417), (1351,417), (1351,397)], # 37 (36)
                 [(1354,397), (1354,417), (1374,417), (1374,397)], # 38 (37) (임시로)
+            ]
+
+            edge_counts = [
+                # 0    1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16   17
+                600, 450, 800, 800, 800, 600, 500, 800, 800, 800, 800, 800, 800, 500, 800, 800, 800, 800,
+                #19   20   21   22   23   24   25   26   27   28   29   30   31   32   33   34   35   36   37
+                400, 550, 550, 550, 550, 550, 550, 550, 550, 550, 490, 550, 550, 550, 550, 550, 550, 550, 300
             ]
 
             # idx 18 ~ 37(여기 18면에는 왼쪽 면이 없으므로 임시로 왼쪽면을 만들어 줌.)
@@ -852,6 +859,10 @@ def check_parking_slot_using_image():
                 # y_center = ys.mean() if len(ys) > 0 else 0
 
                 edge_cnt = count_edges_in_roi(image_np, mask_2d, x_min, y_min, width, height)
+                edge_check = True
+
+                if idx in {7, 8, 9, 10, 11}:
+                    edge_check = edge_cnt >= edge_counts[idx]
 
                 write_log(f"=" * 120)
                 write_log(f"idx+1: {idx+1}, pixel_count               = {pixel_count}")
@@ -859,12 +870,16 @@ def check_parking_slot_using_image():
                 write_log(f"idx+1: {idx+1}, pixel_count > lower       = {pixel_count > lower}, {pixel_count}, {lower}")
                 write_log(f"idx+1: {idx+1}, pixel_count < upper       = {pixel_count < upper}, {pixel_count}, {upper}")
                 write_log(f"idx+1: {idx+1}, isPixelOverlapping(LRUPS) = {isPixelOverlappingLeft}, {isPixelOverlappingRight}, {isPixelOverlappingUp}, {isPixelOverlappingSpace}, {isSpecialCase}")
+                write_log(f"idx+1: {idx+1}, edge_check                = {edge_check}, {edge_cnt}, {edge_counts[idx]}")
                 write_log(f"idx+1: {idx+1}, wh_test                   = {wh_test}, width={width}, height={height}")
                 write_log(f"idx+1: {idx+1}, x, y, xmax, ymax          = {x_min}, {y_min}, {x_max}, {y_max}")
-                write_log(f"idx+1: {idx+1}, colors, edge_cnt          = {color_count}, {edge_cnt}")
+                write_log(f"idx+1: {idx+1}, colors, edge_cnt          = {color_count}")
                 write_log(f"idx+1: {idx+1}, pt                        = {pt}")
 
-                if score_val >= score_thresh and pixel_count > lower and pixel_count < upper and isPixelOverlappingUp and isPixelOverlappingRight and isPixelOverlappingSpace and ((isPixelOverlappingLeft and wh_test) or isSpecialCase):
+                if score_val >= score_thresh and pixel_count > lower and pixel_count < upper \
+                    and isPixelOverlappingUp and isPixelOverlappingRight and isPixelOverlappingSpace \
+                    and ((isPixelOverlappingLeft and wh_test) or isSpecialCase) \
+                    and edge_check :
                     
                     vehicleDetected[idx] = True
                     # print(f"-" * 120)
@@ -923,7 +938,7 @@ def check_parking_slot_using_image():
                     emptyCount += 1
 
                     if pixel_count < 30000:
-                        output_image = overlay_mask(output_image, mask_2d, color=(255, 0, 0), alpha=0.5)
+                        # output_image = overlay_mask(output_image, mask_2d, color=(255, 0, 0), alpha=0.5)
                         output_pil = Image.fromarray(output_image)
                         draw = ImageDraw.Draw(output_pil)  # draw 다시 초기화 필요 (PIL 객체 변경됐기 때문)
 

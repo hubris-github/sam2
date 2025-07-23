@@ -59,6 +59,7 @@ def count_edges_in_roi(
     y_min: int,
     width: int,
     height: int,
+    show: bool = False,
     low_thresh: int = 50,
     high_thresh: int = 150,
     blur_ksize: tuple = (5, 5)
@@ -80,6 +81,17 @@ def count_edges_in_roi(
     Returns:
         edge_count: ROI 내에서 검출된 에지 픽셀(255) 개수
     """
+    H, W = mask_2d.shape
+    if width <= 0 or height <= 0:
+        return 0
+    x0, y0 = x_min, y_min
+    x1, y1 = x_min + width, y_min + height
+    # 영상 범위 밖이면 잘라 맞추기
+    x0, y0 = max(0, x0), max(0, y0)
+    x1, y1 = min(W, x1), min(H, y1)
+    if x0 >= x1 or y0 >= y1:
+        return 0
+    
     # 1) 그레이스케일 변환
     gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
 
@@ -88,14 +100,23 @@ def count_edges_in_roi(
     mask_roi = (mask_2d[y_min:y_min+height, x_min:x_min+width]
                 .astype(np.uint8) * 255)
 
+    # 4) 마스크된 픽셀 체크
+    if mask_roi.sum() == 0:
+        return 0
+    
     # 3) 마스크 적용
-    roi_masked = cv2.bitwise_and(roi_gray, roi_gray, mask=mask_roi)
+    roi_masked = cv2.bitwise_and(roi_gray, roi_gray, mask=mask_roi)    
 
     # 4) 노이즈 제거
     roi_blur = cv2.GaussianBlur(roi_masked, blur_ksize, 0)
 
     # 5) Canny 에지 검출
     edges_roi = cv2.Canny(roi_blur, low_thresh, high_thresh)
+
+    if show:
+        cv2.imshow('Edges', edges_roi)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
     # 6) 에지 픽셀 수 세기
     edge_count = int(np.count_nonzero(edges_roi))
@@ -255,7 +276,7 @@ predictor = SAM2ImagePredictor(sam2_model)
 file_template = "1_*.png" # 1_20250711_235044sshot
 #folder_path = 'D:/Projects/vision/yolo/images/mp4/japan/'
 folder_path = 'D:/Projects/vision/capture_images/20250713/'
-folder_completed_path = 'D:/Projects/vision/capture_images/20250713/completed3/'
+folder_completed_path = 'D:/Projects/vision/capture_images/20250713/completed6/'
 
 start_index = 0
 end_index = 0# 1443
@@ -320,7 +341,7 @@ def check_parking_slot_using_image():
     for filename in files[start_index : end_index + 1 : index_step]:  
 
         # folder_file = folder_path + filename
-        filename = folder_path + "1_20250713_020915sshot.png"
+        filename = folder_path + "1_20250713_120731sshot.png"
         
         print(f"Processing file: {filename}")
 
@@ -494,6 +515,13 @@ def check_parking_slot_using_image():
                 [(1354,397), (1354,417), (1374,417), (1374,397)], # 38 (37) (임시로)
             ]
 
+            edge_counts = [
+                # 0    1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16   17
+                900, 900, 900, 900, 900, 900, 900, 900, 900, 900, 900, 900, 900, 900, 900, 900, 900, 900,
+                #19   20   21   22   23   24   25   26   27   28   29   30   31   32   33   34   35   36   37
+                550, 550, 550, 550, 550, 550, 550, 550, 550, 550, 550, 550, 550, 550, 550, 550, 550, 550, 550
+            ]
+
             # idx 18 ~ 37(여기 18면에는 왼쪽 면이 없으므로 임시로 왼쪽면을 만들어 줌.)
             # idx 0 ~ 17 
             rectangles_as_tuples2 = [
@@ -576,7 +604,7 @@ def check_parking_slot_using_image():
                 # print(f"idx: {idx}, solidity: {solidity:.3f}")
 
                 # 필터 영역 출력
-                selected_idx = 7
+                selected_idx = 29
                 if idx == selected_idx:
                     # np.savetxt("mask_2d.csv", mask_2d, fmt="%d", delimiter=",")
                     img = Image.fromarray((mask_2d * 255).astype(np.uint8))
@@ -855,7 +883,8 @@ def check_parking_slot_using_image():
                 # aspect_ratio = width / height if height != 0 else 0
                 # y_center = ys.mean() if len(ys) > 0 else 0
 
-                edge_cnt = count_edges_in_roi(image_np, mask_2d, x_min, y_min, width, height)
+                edge_cnt = count_edges_in_roi(image_np, mask_2d, x_min, y_min, width, height, show=(idx==selected_idx))
+                edge_check = edge_cnt >= edge_counts[idx]
 
                 print(f"=" * 120)
                 print(f"idx+1: {idx+1}, pixel_count               = {pixel_count}")
@@ -878,7 +907,10 @@ def check_parking_slot_using_image():
                 write_log(f"idx+1: {idx+1}, colors, edge_cnt          = {color_count}, {edge_cnt}")
                 write_log(f"idx+1: {idx+1}, pt                        = {pt}")
 
-                if score_val >= score_thresh and pixel_count > lower and pixel_count < upper and isPixelOverlappingUp and isPixelOverlappingRight and isPixelOverlappingSpace and ((isPixelOverlappingLeft and wh_test) or isSpecialCase):
+                if score_val >= score_thresh and pixel_count > lower and pixel_count < upper \
+                    and isPixelOverlappingUp and isPixelOverlappingRight and isPixelOverlappingSpace \
+                    and ((isPixelOverlappingLeft and wh_test) or isSpecialCase) \
+                    and edge_check :
                     
                     vehicleDetected[idx] = True
                     occupiedCount += 1
