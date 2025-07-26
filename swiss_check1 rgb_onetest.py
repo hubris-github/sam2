@@ -269,8 +269,8 @@ sam2_model = build_sam2(model_cfg, sam2_checkpoint, device=device)
 predictor = SAM2ImagePredictor(sam2_model)
 
 #folder_path = 'D:/Projects/vision/yolo/images/mp4/japan/'
-folder_path = 'D:/Projects/vision/capture_images/20250713/'
-folder_completed_path = 'D:/Projects/vision/capture_images/20250713/parquery5/'
+folder_path = 'D:/Projects/vision/capture_images/20250714/'
+folder_completed_path = 'D:/Projects/vision/capture_images/20250714/parquery2/'
 
 start_index = 0 #0
 end_index = 0
@@ -364,9 +364,7 @@ def check_parking_slot_using_image():
 
     for index, filename in enumerate(files[start_index : end_index + 1 : index_step]):  
 
-        filename = folder_path + "4_20250714_053510sshot.png"
-        filename = folder_path + "4_20250713_220828sshot.png"
-        filename = folder_path + "4_20250714_053811sshot.png"
+        filename = folder_path + "4_20250714_120749sshot.png"
 
         print(f"{start_index+index}, Processing file: {filename}")
 
@@ -375,10 +373,44 @@ def check_parking_slot_using_image():
             image_np = np.array(image_pil.convert("RGB"))
             # image_np = np.array(image_pil.convert("L"))
 
-            output_image = image_np.copy()  # 마스크 누적할 이미지
+            gray = np.array(image_pil.convert("L"))  # Convert to grayscale
 
-            output_pil = Image.fromarray(output_image)
-            draw = ImageDraw.Draw(output_pil)
+            # 3) CLAHE로 대비 향상
+            clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+            enhanced = clahe.apply(gray)
+
+            # 4) 언샤프 마스크로 샤프닝
+            blur = cv2.GaussianBlur(enhanced, (0, 0), sigmaX=3, sigmaY=3)
+            sharpened = cv2.addWeighted(enhanced, 1.5, blur, -0.5, 0)
+
+            # 5) 캐니 에지 검출
+            edges = cv2.Canny(sharpened, threshold1=50, threshold2=150)
+
+            # 6) 에지 팽창
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+            edges_dilated = cv2.dilate(edges, kernel, iterations=1)
+
+            # 7) BGR 변환 및 빨간색 에지 오버레이
+            bgr = cv2.cvtColor(sharpened, cv2.COLOR_GRAY2BGR)
+            overlay = bgr.copy()
+            overlay[edges_dilated > 0] = (0, 0, 255)
+
+            # 8) 원본과 합성
+            output = cv2.addWeighted(bgr, 0.7, overlay, 0.3, 0)
+            
+            mask_color = np.zeros_like(image_np)
+            # edges_dilated > 0 인 픽셀에 빨간(RGB) 채널만 255
+            mask_color[edges_dilated > 0] = [255, 0, 0]
+
+            # 2) 원본과 블렌딩
+            alpha = 0.7  # 원본 가중치
+            beta  = 0.3  # 마스크 가중치
+            # output_image = (image_np * alpha + mask_color * beta).astype(np.uint8)
+
+            output_image = cv2.addWeighted(image_np, alpha, mask_color, beta, 0)
+
+            # output_image = image_np.copy()  # 마스크 누적할 이미지
+
 
             try:
                     font = ImageFont.truetype("arial.ttf", 15)
