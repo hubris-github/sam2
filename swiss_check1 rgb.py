@@ -18,7 +18,8 @@ import cv2
 import glob
 from scipy.ndimage import label
 import skimage.measure
-
+from typing import List, Tuple
+from pathlib import Path
 
 supabase_url = "https://cevsjxqctilqzaeqllqc.supabase.co"
 supabase_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNldnNqeHFjdGlscXphZXFsbHFjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcxNDc5MjMxMSwiZXhwIjoyMDMwMzY4MzExfQ.oaEtnfGqjcMhbvNTadlOlAEf6Wji6-Qi8H2HLetOe4o"
@@ -269,11 +270,11 @@ sam2_model = build_sam2(model_cfg, sam2_checkpoint, device=device)
 predictor = SAM2ImagePredictor(sam2_model)
 
 #folder_path = 'D:/Projects/vision/yolo/images/mp4/japan/'
-folder_path = 'D:/Projects/vision/capture_images/20250713/'
-folder_completed_path = 'D:/Projects/vision/capture_images/20250713/parquery2/'
+folder_path = 'D:/Projects/vision/capture_images/20250714/'
+folder_completed_path = 'D:/Projects/vision/capture_images/20250714/parquery1/'
 
-start_index = 158 #0
-end_index = 1037
+start_index = 0
+end_index = 1420
 index_step = 1
 
 # def overlay_mask(base_image, mask, color=(30, 144, 255), alpha=0.6):
@@ -291,7 +292,7 @@ index_step = 1
 #     base_image[mask] = (1 - alpha) * base_image[mask] + alpha * overlay[mask]
 #     return base_image
 
-def overlay_mask(base_image, mask, color=(30, 144, 255), alpha=0.6):
+def overlay_mask(base_image, mask, color=(30, 144, 255), alpha=0.5):
     """
     base_image: (H, W, 3)  np.ndarray (BGR)
     mask:       (H, W)     np.ndarray, dtype=bool or 0/1
@@ -325,10 +326,47 @@ def write_log(message: str) -> None:
     with open(log_filename, 'a', encoding='utf-8') as f:
         f.write(log_line)
 
+# rectangles_as_tuples 은 List[List[Tuple[int,int]]] 형태
+# 각 inner list 는 네 개의 (x, y) 꼭짓점 좌표를 담고 있다고 가정합니다.
+def is_within_rectangle(
+    x_min: int,
+    x_max: int,
+    y_min: int,
+    y_max: int,
+    rect_pts: List[Tuple[int,int]]
+) -> bool:
+    """
+    rect_pts: [(x1,y1), (x2,y2), (x3,y3), (x4,y4)]
+    반환: rect_pts 가 정의하는 사각형 내부에
+         [x_min, x_max] × [y_min, y_max] 영역이
+         완전히 포함되면 True, 아니면 False
+    """
+    # 1) “값이 하나라도 0” 조건
+    if any(x == 0 or y == 0 for x, y in rect_pts):
+        return True
+
+    # 2) 실제 포함 여부 계산
+    xs = [p[0] for p in rect_pts]
+    ys = [p[1] for p in rect_pts]
+    rect_x_min, rect_x_max = min(xs), max(xs)
+    rect_y_min, rect_y_max = min(ys), max(ys)
+
+    return (
+        rect_x_min <= x_min and
+        x_max      <= rect_x_max and
+        rect_y_min <= y_min and
+        y_max      <= rect_y_max
+    )
+
 def check_parking_slot_using_image():
   
     pattern = folder_path + "4_*sshot.png"
     files = glob.glob(pattern)
+
+    parent = Path(folder_completed_path)  # 실제 경로로 변경
+    for i in range(38):
+        (parent / str(i)).mkdir(exist_ok=True)
+        print(f"Created: {parent / str(i)}")
 
     for index, filename in enumerate(files[start_index : end_index + 1 : index_step]):  
 
@@ -340,9 +378,6 @@ def check_parking_slot_using_image():
             # image_np = np.array(image_pil.convert("L"))
 
             output_image = image_np.copy()  # 마스크 누적할 이미지
-
-            output_pil = Image.fromarray(output_image)
-            draw = ImageDraw.Draw(output_pil)
 
             try:
                     font = ImageFont.truetype("arial.ttf", 15)
@@ -418,53 +453,56 @@ def check_parking_slot_using_image():
             #                   A1     A2     A3     A4     A5     A6     A7     A8     A9     B1     B2     B3     B4     B5     B6     B7     B8     B9     B10    B11    B12    C1     C2     C3     C4     C5     C6     C7     C8     C9     C10    C11    C12    D1     D2     D3     D4     D5
             lower_thresholds = [2000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  3000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  2000,  1000,  1000,  1000,  1000,  1000,  1000,  1000 ]
             upper_thresholds = [15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 30000, 30000, 30000, 30000, 30000]
-            score_thresholds = [0.7,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6  ]
+            score_thresholds = [0.7,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.3,   0.25,  0.5,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6,   0.6  ]
             wh_thresholds    = [1,     1,     1,     2,     2,     2,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     2,     2,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1,     1    ]
             vehicleDetected  = [False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False]
-            width_thresholds = [120,   150,   150,   150,   150,   150,   130,   130,   130,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   220,   220,   220,   220,   220    ]
+            width_thresholds = [120,   150,   150,   150,   150,   150,   130,   130,   130,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   170,   170,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   230,   230,   240,   230,   230    ]
             height_thresholds= [70,    80,    80,    80,    80,    80,    80,    80,    130,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   150,   120,   120,   120,   120,   120    ]
             wh_direction     = [-1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    0,     0,     0,     1,     1,     1,     1,     1,     1,     1,     -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    0,     0,     0,     1,     1,     1,     1,     1,     1,     1,     1,     1    ]
-            slots = [f"A{i}" for i in range(1, 13)] + [f"B{i}" for i in range(1, 13)]
+            
+
             rectangles_as_tuples = [
-                [(53, 529), (1, 581), (11, 614), (78, 538)],      # 1 (idx 0)
-                [(88, 542), (18, 619), (42, 634), (121, 549)],    # 2
-                [(127, 554), (53, 641), (85, 658), (166, 562)],   # 3
-                [(182, 564), (98, 665), (124, 675), (207, 576)],  # 4
-                [(236, 578), (153, 691), (209, 712), (293, 590)], # 5 (idx 4)
-                [(311, 596), (227, 719), (304, 742), (383, 607)], # 6
-                [(398, 606), (323, 746), (416, 763), (478, 616)], # 7
-                [(502, 619), (450, 747), (558, 748), (589, 625)], # 8
-                [(617, 629), (580, 796), (698, 807), (712, 633)], # 9
-                [(737, 633), (735, 801), (853, 802), (833, 634)], #10
-                [(860, 632), (889, 802), (996, 791), (950, 630)],     # 11 (idx 10)
-                [(984, 628), (1037, 786), (1117, 767), (1053, 623)],  # 12
-                [(1075, 620), (1141, 762), (1215, 743), (1144, 613)], # 13
-                [(1162, 609), (1234, 736), (1292, 717), (1218, 602)], # 14
-                [(1234, 599), (1308, 711), (1350, 693), (1280, 591)], # 15
-                [(1293, 588), (1362, 686), (1402, 665), (1335, 574)], # 16
-                [(1339, 575), (1405, 664), (1428, 649), (1371, 570)], # 17
-                [(1379, 566), (1428, 630), (1429, 594), (1401, 560)], # 18(우끝)
-                
-                [(198, 402), (138, 455), (167, 457), (228, 405)], # 19 (idx 18)
-                [(242, 402), (183, 459), (210, 462), (279, 402)], # 20 (idx 19) 
-                [(281, 409), (220, 462), (260, 466), (318, 411)], # 21 (idx 20)
-                [(331, 411), (271, 467), (319, 468), (372, 410)], # 22 (idx 21)
-                [(386, 411), (333, 470), (385, 472), (434, 414)], # 23 (idx 22)
-                [(450, 416), (399, 475), (459, 477), (502, 415)], # 24 (idx 23)
-                [(518, 414), (477, 479), (540, 481), (572, 416)], # 25 (idx 24)
-                [(590, 418), (559, 484), (629, 483), (647, 418)], # 26 (idx 25)
-                [(665, 419), (649, 485), (720, 487), (724, 421)], # 27 (idx 26)
-                [(743, 421), (741, 488), (811, 489), (802, 422)], # 28 (idx 27)
-                [(820, 422), (833, 488), (901, 489), (877, 423)], # 29 (idx 28)
-                [(895, 423), (921, 489), (985, 488), (956, 421)], # 30 (idx 29)
-                [(972, 424), (1003, 488), (1063, 488), (1020, 426)], # 31
-                [(1033, 425), (1078, 486), (1131, 487), (1080, 426)], # 32
-                [(1095, 426), (1146, 485), (1191, 485), (1136, 427)], # 33
-                [(1150, 426), (1203, 482), (1241, 481), (1186, 427)], # 34
-                [(1199, 429), (1253, 480), (1287, 480), (1229, 428)], # 35
-                [(1252, 429), (1303, 479), (1348, 476), (1296, 427)], # 36
-                [(1297, 423), (1353, 473), (1374, 471), (1326, 426)], # 37
-                [(1326, 425), (1374, 471), (1400, 467), (1356, 422)], # 38 (임시로)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 1 (0)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 2 (1)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 3 (2)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 4 (3)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 5 (4)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 6 (5)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 7 (6)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 8 (7)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 9 (8)
+
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 10 (9)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 11 (10)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 12 (11)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 13 (12)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 14 (13)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 15 (14)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 16 (15)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 17 (16)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 18 (17)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 19 (18)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 20 (19)
+                [(1041, 234), (1041, 337), (1120, 337), (1120, 234)], # 21 (20)
+
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 22 (21)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 23 (22)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 24 (23)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 25 (24)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 26 (25)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 27 (26) 
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 28 (27)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 29 (28)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 30 (29)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 31 (30) 
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 32 (31)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 33 (32)
+
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 34 (33)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 35 (34)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 36 (35)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 37 (36)
+                [(0, 0), (0, 0), (0, 0), (0, 0)], # 38 (37)
             ]
 
             upanddown_as_tuples = [
@@ -491,18 +529,18 @@ def check_parking_slot_using_image():
                 [(1008, 235), (1008, 253), (1038, 253), (1038, 235)], # 20 (19)
                 [(1061, 242), (1061, 260), (1093, 260), (1093, 242)], # 21 (20)
 
-                [(98, 283), (98, 298), (142, 298), (142, 283)], # 22 (21)
-                [(200, 283), (200, 298), (252, 298), (252, 283)], # 23 (22)
-                [(310, 280), (310, 298), (378, 298), (378, 280)], # 24 (23)
+                [(98, 283), (98, 301), (142, 298), (142, 283)], # 22 (21)
+                [(200, 283), (200, 301), (252, 298), (252, 283)], # 23 (22)
+                [(310, 280), (310, 301), (378, 301), (378, 280)], # 24 (23)
                 [(424, 290), (424, 302), (470, 302), (470, 290)], # 25 (24)
                 [(530, 292), (530, 306), (582, 306), (582, 292)], # 26 (25)
                 [(637, 292), (637, 308), (687, 308), (687, 292)], # 27 (26) 
-                [(732, 297), (732, 316), (782, 316), (782, 297)], # 28 (27)
+                [(732, 297), (732, 309), (782, 309), (782, 297)], # 28 (27)
                 [(821, 305), (821, 318), (877, 318), (877, 305)], # 29 (28)
                 [(909, 311), (909, 324), (960, 324), (960, 311)], # 30 (29)
-                [(980, 314), (980, 329), (1027, 329), (1027, 314)], # 31 (30) 
-                [(1050, 322), (1050, 336), (1087, 336), (1087, 322)], # 32 (31)
-                [(1104, 326), (1104, 341), (1130, 341), (1130, 326)], # 33 (32)
+                [(980, 314), (980, 324), (1027, 324), (1027, 314)], # 31 (30) 
+                [(1050, 322), (1050, 329), (1087, 329), (1087, 322)], # 32 (31)
+                [(1104, 326), (1104, 335), (1130, 335), (1130, 326)], # 33 (32)
 
                 [(12, 493), (12, 510), (73, 510), (73, 493)], # 34 (33)
                 [(186, 499), (186, 520), (278, 520), (278, 499)], # 35 (34)
@@ -754,19 +792,28 @@ def check_parking_slot_using_image():
                
                 edge_cnt = count_edges_in_roi(image_np, mask_2d, x_min, y_min, width, height)
 
+                isWithInRectangle = is_within_rectangle(x_min, y_min, x_max, y_max, rectangles_as_tuples[idx])
+
                 write_log(f"=" * 120)
                 write_log(f"idx+1: {idx+1}, pixel_count               = {pixel_count}")
                 write_log(f"idx+1: {idx+1}, score_val >= score_thresh = {score_val >= score_thresh}, {score_val}, {score_thresh}")
                 write_log(f"idx+1: {idx+1}, pixel_count > lower       = {pixel_count > lower}, {pixel_count}, {lower}")
                 write_log(f"idx+1: {idx+1}, pixel_count < upper       = {pixel_count < upper}, {pixel_count}, {upper}")
                 write_log(f"idx+1: {idx+1}, isPixelOverlapping(LRUPS) = {isPixelOverlappingLeft}, {isPixelOverlappingRight}, {isPixelOverlappingUp}, {isPixelOverlappingSpace}, {isSpecialCase}")
+                write_log(f"idx+1: {idx+1}, isWithInRectangle         = {isWithInRectangle}")
                 write_log(f"idx+1: {idx+1}, wh_test                   = {wh_test}, width={width}, height={height}")
                 write_log(f"idx+1: {idx+1}, x, y, xmax, ymax          = {x_min}, {y_min}, {x_max}, {y_max}")
                 write_log(f"idx+1: {idx+1}, colors, edge_cnt          = {color_count}, {edge_cnt}")
                 write_log(f"idx+1: {idx+1}, pt                        = {pt}")
 
-                if score_val >= score_thresh and pixel_count > lower and pixel_count < upper and isPixelOverlappingUp and isPixelOverlappingRight and isPixelOverlappingSpace and ((isPixelOverlappingLeft and wh_test) or isSpecialCase):
-                    
+                if isWithInRectangle == False:
+                    write_log(f"idx+1: {idx+1}, isWithInRectangle = {isWithInRectangle}, rectangles_as_tuples[idx] = {rectangles_as_tuples[idx]}")
+
+                isCondition1 = score_val >= score_thresh and pixel_count > lower and pixel_count < upper and isWithInRectangle
+                isCondition2 = isPixelOverlappingUp and isPixelOverlappingRight and isPixelOverlappingSpace
+
+                if isCondition1 and isCondition2 and ((isPixelOverlappingLeft and wh_test) or isSpecialCase):
+
                     vehicleDetected[idx] = True
                     occupiedCount += 1
 
@@ -789,6 +836,28 @@ def check_parking_slot_using_image():
 
                     output_image = np.array(output_pil)
 
+                    debug_image = image_np.copy()
+                    debug_image = overlay_mask(debug_image, mask_2d, color=(255, 255, 0), alpha=0.6)
+                    debug_pil = Image.fromarray(debug_image)
+                    draw2 = ImageDraw.Draw(debug_pil)
+
+                    xs = [p[0] for p in upanddown_as_tuples[idx]]
+                    ys = [p[1] for p in upanddown_as_tuples[idx]]
+                    rect_x_min, rect_x_max = min(xs), max(xs)
+                    rect_y_min, rect_y_max = min(ys), max(ys)
+                    draw2.rectangle(
+                        [(rect_x_min, rect_y_min), (rect_x_max, rect_y_max)],
+                        outline="red", width=2
+                    )
+
+                    file_name = os.path.basename(filename)
+                    name, ext = os.path.splitext(file_name)  # name = "image001", ext = ".jpg"
+                    file_name_with_count = f"{name}{ext}"
+
+                    debug_folder = folder_completed_path + f"{idx}/"
+                    debug_path = os.path.join(debug_folder, file_name_with_count)
+                    debug_pil.save(debug_path)
+
                 else:
                     write_log(f"-" * 120)
                     write_log(f"idx+1: {idx+1}, [# XXX #] Occupied Count: {occupiedCount}, Empty Count: {emptyCount}, Score={score_val:.3f}, width={width}, height={height}, 색상수={color_count}")
@@ -797,6 +866,28 @@ def check_parking_slot_using_image():
                     write_log(f" " * 10)
 
                     emptyCount += 1
+
+                    debug_image = image_np.copy()
+                    debug_image = overlay_mask(debug_image, mask_2d, color=(255, 0, 0), alpha=0.6)
+                    debug_pil = Image.fromarray(debug_image)
+                    draw2 = ImageDraw.Draw(debug_pil)
+                    
+                    xs = [p[0] for p in upanddown_as_tuples[idx]]
+                    ys = [p[1] for p in upanddown_as_tuples[idx]]
+                    rect_x_min, rect_x_max = min(xs), max(xs)
+                    rect_y_min, rect_y_max = min(ys), max(ys)
+                    draw2.rectangle(
+                        [(rect_x_min, rect_y_min), (rect_x_max, rect_y_max)],
+                        outline="yellow", width=1
+                    )
+            
+                    file_name = os.path.basename(filename)
+                    name, ext = os.path.splitext(file_name)  # name = "image001", ext = ".jpg"
+                    file_name_with_count = f"{name}{ext}"
+
+                    debug_folder = folder_completed_path + f"{idx}/"
+                    debug_path = os.path.join(debug_folder, file_name_with_count)
+                    debug_pil.save(debug_path)
 
                     if pixel_count < 30000:
                         # output_image = overlay_mask(output_image, mask_2d, color=(255, 0, 0), alpha=0.5)
@@ -852,7 +943,9 @@ def check_parking_slot_using_image():
                         if wh_test == False:
                             draw.text((x-25, y + 10), f"{width:.0f},{height:.0f}", fill="red", font=font)   
 
-                        output_image = np.array(output_pil)   
+                        output_image = np.array(output_pil)
+
+
 
             output_pil = Image.fromarray(output_image)
             draw = ImageDraw.Draw(output_pil)   
