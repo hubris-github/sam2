@@ -274,7 +274,7 @@ folder_path = 'D:/Projects/vision/capture_images/20250714/'
 folder_completed_path = 'D:/Projects/vision/capture_images/20250714/parquery2/'
 
 start_index = 258 #0
-end_index = 1420
+end_index = 1419
 index_step = 1
 
 # def overlay_mask(base_image, mask, color=(30, 144, 255), alpha=0.6):
